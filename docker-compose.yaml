@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  diagram_db:
+    image: postgres:15
+    restart: unless-stopped
+    container_name: diagram_db_container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: erick17
+      POSTGRES_DB: diagrambd
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
