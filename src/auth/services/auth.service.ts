@@ -22,6 +22,7 @@ export class AuthService {
       throw new NotFoundException("Usuario no encontrado")
 
     const validatePass = bcrypt.compareSync(loginDto.password, findUser.password);
+    
     if(!validatePass)
       throw new BadRequestException("Ingrese el password correcto");
 
