@@ -1,6 +1,5 @@
 import { BadRequestException, CanActivate, ExecutionContext, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Query, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role } from '@prisma/client';
 import { Request } from 'express';
 import { UserRoomService } from 'src/room/services';
 
@@ -16,10 +15,6 @@ export class RoomRoleGuard implements CanActivate {
     context: ExecutionContext,
   ):  Promise<boolean>  {
     const req = context.switchToHttp().getRequest<Request>();
-    const get_roles = this.reflector.get<Role[]>('roles',context.getHandler());
-    if(!get_roles)
-      throw new InternalServerErrorException("Error inesperado con asignacion de roles, consulte a soporte.")
-
     const roomCode = req.params?.roomCode;
     console.log(roomCode);
     if (!roomCode) {
@@ -33,9 +28,6 @@ export class RoomRoleGuard implements CanActivate {
     if(!member)
       throw new NotFoundException("El usuario no pertenece a esta sala de diseño.")
 
-    if(!get_roles.includes(member.role))
-      throw new UnauthorizedException("Usted no tiene permiso para realizar esta accion.")
-    
     return true;
   }
 }

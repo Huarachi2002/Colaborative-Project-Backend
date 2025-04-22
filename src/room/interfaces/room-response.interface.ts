@@ -1,4 +1,4 @@
-import { Role, Room, User, User_Room } from "@prisma/client";
+import { Room, User, User_Room } from "@prisma/client";
 
 
 export interface IResponseRooms { 
@@ -13,17 +13,18 @@ export interface IResponseRoom {
 
 export interface IResponseRoomAll {
   id:           number;
+  idRoom:       string;
   code:         string;
   name:         string;
   description:  string;
-  status:       boolean; 
+  maxMembers:   number;
+  createdBy:    string;
   createdAt:    Date;
   updatedAt:    Date;
   users:        IUsersRoomRole[];
 }
 
 interface IUsersRoomRole {
-  role:         Role;
   createdAt:    Date;
 }
 

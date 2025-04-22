@@ -30,42 +30,26 @@ model User_Room{
   user_id        String @db.Uuid 
   user           User   @relation(references: [id], fields: [user_id])
   
-  role           Role
-  
   room_id        Int    @db.Integer
   room           Room   @relation(references: [id], fields: [room_id])
 
-
-  status         STATUS @default(OFICIAL)
   createdAt      DateTime @db.Timestamp() @default(now()) 
 
   @@id([user_id,room_id])
 }
 
-enum Role{
-  OWNER
-  COLABORATOR
-  MEMBER
-}
-
-enum STATUS {
-  INVITATION
-  OFICIAL
-  REFUSED
-  REMOVED
-}
 
 model Room{
   id            Int @db.Integer @default(autoincrement()) @id
-  code          String @db.VarChar(8) @unique
+  idRoom        String @db.VarChar(6) @unique
+  code          String @db.VarChar(6) @unique
   name          String @db.VarChar(50)
   description   String @db.Text
-
-  status        Boolean @default(true)
+  maxMembers    Int @db.Integer
 
   users         User_Room[]
-  data          Json
 
+  createdBy      String @db.Text
   createdAt     DateTime @db.Timestamp() @default(now()) 
   updatedAt     DateTime @db.Timestamp() @default(now()) @updatedAt
 }

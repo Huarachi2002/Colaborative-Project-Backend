@@ -8,7 +8,6 @@ import { UserService } from 'src/user/services';
 import { AddUserRoomDto, RemovedUserRoomDto } from '../dto';
 import { UserRoomService } from '../services';
 import { RoomRoleGuard } from 'src/auth/guard/room-role.guard';
-import { Roles } from 'src/auth/decorator';
 import { IReponseUserRoom } from '../interfaces';
 
 @Controller('user-room/:roomCode')
@@ -72,7 +71,6 @@ export class UserRoomController {
 
   @Post("invitation")
   @HttpCode(HttpStatus.CREATED)
-  @Roles("OWNER","COLABORATOR")
   @UseGuards(RoomRoleGuard)
   public async addUserRoom(
     @Body() addUserRoomDto:AddUserRoomDto,
@@ -128,7 +126,6 @@ export class UserRoomController {
 
   @Delete("removed-user")
   @HttpCode(HttpStatus.OK)
-  @Roles("OWNER")
   @UseGuards(RoomRoleGuard)
   public async removedUserRoom(
     @Body() removedDto: RemovedUserRoomDto,
@@ -148,7 +145,6 @@ export class UserRoomController {
 
   @Put("updated-role")
   @HttpCode(HttpStatus.OK)
-  @Roles("OWNER")
   @UseGuards(RoomRoleGuard)
   public async updatedUserRole(
     @Param('roomCode', ParseIntPipe) roomId: number,

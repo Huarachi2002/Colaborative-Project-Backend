@@ -5,5 +5,5 @@ export class RemovedUserRoomDto {
   
   @IsString()
   @IsUUID()
-  user_id: string;
+  userId: string;
 }

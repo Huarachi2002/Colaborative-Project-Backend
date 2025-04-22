@@ -1,5 +1,5 @@
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role, Room } from '@prisma/client';
+import { Prisma, Room } from '@prisma/client';
 import { QueryCommonDto } from 'src/common/dto';
 import { PrismaService } from 'src/prisma/services';
 import { CreateRoomDto } from '../dto';
@@ -21,7 +21,7 @@ export class RoomService {
 
   private generateCodeRoom(): string {
     let codigo = '';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       const indiceAleatorio = Math.floor(Math.random() * this.characteres.length);
       codigo += this.characteres[indiceAleatorio];
     }
@@ -52,33 +52,24 @@ export class RoomService {
               }
             }
           },
-          {
-            users: {
-              every: {
-                status: "OFICIAL"
-              }
-            }
-          }
         ]
       },
       take: limit,
       skip,
       select: {
         id: true,
+        idRoom: true,
         code: true,
         name: true,
         description: true,
+        maxMembers: true,
+        createdBy: true,
         createdAt: true,
         updatedAt: true,
-        status: true,
         users: {
           where: {
             user_id: userId
           },
-          select: {
-            role: true,
-            createdAt: true,
-          }
         }
       }
     })
@@ -103,13 +94,6 @@ export class RoomService {
             users: {
               some: {
                 user_id: userId
-              }
-            }
-          },
-          {
-            users: {
-              every: {
-                status: "OFICIAL"
               }
             }
           }
@@ -153,17 +137,17 @@ export class RoomService {
 
     const createRoom = await this.prismaService.room.create({
       data: {
+        idRoom: createRoomDto.idRoom,
         name: createRoomDto.name,
         description: createRoomDto.description,
         code: this.generateCodeRoom(),
+        maxMembers: createRoomDto.maxMembers,
+        createdBy: createRoomDto.createdBy,
         users:{
           create: {
             user_id: findeUser.id,
-            role: "OWNER",
-            status: "OFICIAL"
           }
         },
-        data: {}
       }
     })
 
@@ -196,8 +180,6 @@ export class RoomService {
         findUser.id,
         findIdRoom.id
     );
-    if(!findUserRoom || findUserRoom.role !== "OWNER")
-      throw new BadRequestException("No puede editar esta sala")
 
     const updateRoom = await this.prismaService.room.update({
       where: {
@@ -221,8 +203,6 @@ export class RoomService {
       findUser.id,
       findIdRoom.id
     );
-    if(!findUserRoom || findUserRoom.role === "COLABORATOR")
-      throw new BadRequestException("No puede actualizar el codigo de esta sala")
 
     const updateCodeRoom = await this.prismaService.room.update({
       where: {

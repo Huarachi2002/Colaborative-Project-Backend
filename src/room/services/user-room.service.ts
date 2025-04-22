@@ -45,9 +45,6 @@ export class UserRoomService {
     
     let existUserRoom: Boolean = finduserRoom != null;
 
-    if(existUserRoom && finduserRoom.status === "OFICIAL")
-      throw new BadRequestException("El usuario ya se encuentra en la sala")
-
     try {
       const createInvitation = await this.prismaService.$transaction(async (t) => {
         await this.mailService.sendInvitationRoom({
@@ -56,29 +53,14 @@ export class UserRoomService {
         });
 
         let createInvitationRoom: User_Room ;
-        if(existUserRoom){
-          createInvitationRoom = await t.user_Room.update({
-            where: {
-              user_id_room_id: {
-                room_id: findRoom.id,
-                user_id: findUser.id
-              }
-            },
-            data: {
-              status: "INVITATION"
-            }
-          });
-        }
-        else {
-          createInvitationRoom = await t.user_Room.create({
-            data: {
-              room_id: findRoom.id,
-              user_id: findUser.id,
-              role: addUserRoomDto.role,
-              status: "INVITATION"            
-            }
-          });
-        }
+
+        createInvitationRoom = await t.user_Room.create({
+          data: {
+            room_id: findRoom.id,
+            user_id: findUser.id,
+          }
+        });
+
         return createInvitationRoom;
       });
       return createInvitation;
@@ -96,10 +78,6 @@ export class UserRoomService {
     if(!findUserRoom)
       throw new NotFoundException("El usuario no tiene ninguna invitacion.");
 
-    if(findUserRoom.status != "INVITATION")
-      throw new BadRequestException("El usuario no puede aceptar la invitacion porque no tiene una.");
-
-
     const findUser = await this.userService.findIdUser(user_id);
     const findRoom = await this.roomService.findIdRoom(room_id);
 
@@ -116,7 +94,7 @@ export class UserRoomService {
         }
       },
       data: {
-        status: "OFICIAL"
+        // status: "OFICIAL"
       }
     });
     return updatedUserRoom;
@@ -132,9 +110,6 @@ export class UserRoomService {
     if(!findUserRoom)
       throw new NotFoundException("El usuario no tiene ninguna invitacion.");
 
-    if(findUserRoom.status != "INVITATION")
-      throw new BadRequestException("El usuario no puede aceptar la invitacion porque no tiene una.");
-
     const updatedUserRoom = await this.prismaService.user_Room.update({
       where: {
         user_id_room_id: {
@@ -143,7 +118,7 @@ export class UserRoomService {
         },
       },
       data: {
-        status: "REFUSED"
+        // status: "REFUSED"
       }
     });
 
@@ -154,12 +129,9 @@ export class UserRoomService {
     removedDto: RemovedUserRoomDto,
     roomId: number
   ): Promise<User_Room> {
-    const findUser = await this.userService.findIdUser(removedDto.user_id);
+    const findUser = await this.userService.findIdUser(removedDto.userId);
 
     const findUserRoom = await this.findUserRoom(findUser.id,roomId);
-
-    if(!findUserRoom || findUserRoom.status !== "OFICIAL")
-      throw new BadRequestException("El usuario no se puede remover de la sala porque no pertenece a esta");
 
     const updatedUserRoom = await this.prismaService.user_Room.update({
       where: {
@@ -169,7 +141,7 @@ export class UserRoomService {
         }
       },
       data: {
-        status: "REMOVED"
+        // status: "REMOVED"
       }
     });
 
@@ -184,8 +156,8 @@ export class UserRoomService {
     if(!findUserRoom)
       throw new BadRequestException("El usuario no se encuentra en la sala");
 
-    if(findUserRoom.status !== "OFICIAL")
-      throw new BadRequestException("El usuario no se encuentra habilitado para la sala.")
+    // if(findUserRoom.status !== "OFICIAL")
+    //   throw new BadRequestException("El usuario no se encuentra habilitado para la sala.")
 
     const updatedUser = await this.prismaService.user_Room.update({
       where: {
@@ -195,7 +167,7 @@ export class UserRoomService {
         },
       },
       data: {
-        role: userUpdatedRole.role
+        // role: userUpdatedRole.role
       }
     });
     return updatedUser;

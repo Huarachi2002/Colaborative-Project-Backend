@@ -44,10 +44,12 @@ export class RoomController {
     const statusCode = HttpStatus.OK;
     const findRoom = await this.roomService.findIdRoom(roomId, {
       id: true,
+      idRoom: true,
       name: true,
-      description: true,
       code: true,
-      status: true,
+      description: true,
+      maxMembers: true,
+      createdBy: true,
       createdAt: true,
       updatedAt: true,
       users: {
