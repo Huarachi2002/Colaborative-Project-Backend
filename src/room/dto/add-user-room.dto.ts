@@ -1,8 +1,14 @@
-import { IsString, IsUUID } from "class-validator";
+import { IsArray, IsString } from "class-validator";
 
 
 export class AddUserRoomDto {
-  @IsUUID()
   @IsString()
-  userId: string;
+  code: string;
+
+  @IsString()
+  name: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  emails: string[];
 }

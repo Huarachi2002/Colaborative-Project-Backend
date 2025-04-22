@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { IApiResponse } from 'src/common/interface';
 import { IResponseRoom, IResponseRoomId, IResponseRooms } from '../interfaces';
 import { Request } from 'express';
@@ -68,15 +68,14 @@ export class RoomController {
     }
   }
 
-  @Post()
+  @Post(':idUser')
   @HttpCode(HttpStatus.CREATED)
   public async createRomms(
-    @Req() req: Request,
+    @Param('idUser', ParseUUIDPipe) idUser: string,
     @Body() createRoomDto: CreateRoomDto
   ): Promise<IApiResponse<IResponseRoom>>{
     const statusCode = HttpStatus.CREATED;
-    const {UserId} = req;
-    const room = await this.roomService.createRoom(createRoomDto,UserId);
+    const room = await this.roomService.createRoom(createRoomDto, idUser);
 
     return { 
       statusCode,

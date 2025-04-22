@@ -15,30 +15,28 @@ export class MailService {
   public async sendInvitationRoom(invitation: IInvitationRoom): Promise<void> {
     const url = this.configService.get<string>("url_frontend");
     await this.mailerService.sendMail({
-      to: invitation.user.email,
-      subject: "Invitacion para unirse a un sala de diseño UI/UX",
+      to: invitation.email,
+      subject: `Invitacion para unirse a un sala de diseño UI/UX. \n Utilice este codigo para unirse a la sala (${invitation.code}).`,
       template: "./invitation",
       context: {
-        roomName: invitation.room.name,
-        acceptUrl: `${url}/invitation/${invitation.room.code}`
+        roomName: invitation.name,
+        acceptUrl: `${url}/login`
       }
     })
-
-    
   }
-  public async acceptInvitation(invitation: IInvitationRoom): Promise<void> {
-    const url = this.configService.get<string>("url_frontend");
+  // public async acceptInvitation(invitation: IInvitationRoom): Promise<void> {
+  //   const url = this.configService.get<string>("url_frontend");
 
-    await this.mailerService.sendMail({
-      to: invitation.user.email,
-      subject: `Bienvenido a la sala ${invitation.room.name}!`,
-      template: "./welcome",
-      context: {
-        roomName: invitation.room.name,
-        userName: invitation.user.username,
-        roomUrl: `${url}/room/${invitation.room.code}`,
-      }
-    })
+  //   await this.mailerService.sendMail({
+  //     to: invitation.user.email,
+  //     subject: `Bienvenido a la sala ${invitation.room.name}!`,
+  //     template: "./welcome",
+  //     context: {
+  //       roomName: invitation.room.name,
+  //       userName: invitation.user.username,
+  //       roomUrl: `${url}/room/${invitation.room.code}`,
+  //     }
+  //   })
     
-  }
+  // }
 }

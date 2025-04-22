@@ -3,15 +3,17 @@ import { UserService } from './services';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { UserController } from './controllers';
 import { AuthModule } from 'src/auth/auth.module';
+import { RoomModule } from 'src/room/room.module';
 
 @Module({
   providers: [UserService],
   imports: [
     PrismaModule,
-    forwardRef( () => AuthModule)
+    forwardRef( () => AuthModule),
+    forwardRef(() => RoomModule)
   ],
   exports: [
-    UserService
+    UserService  
   ],
   controllers: [UserController]
 })

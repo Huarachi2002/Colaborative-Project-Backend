@@ -9,7 +9,7 @@ import { IResponseRoomAll } from '../interfaces';
 
 @Injectable()
 export class RoomService {
-  private characteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; 
+  private characteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; 
 
   constructor(
     private readonly prismaService: PrismaService,
@@ -48,7 +48,8 @@ export class RoomService {
           {
             users: {
               some: {
-                user_id: userId
+                user_id: userId,
+                status: "MIEMBRO"
               }
             }
           },
@@ -68,7 +69,8 @@ export class RoomService {
         updatedAt: true,
         users: {
           where: {
-            user_id: userId
+            user_id: userId,
+            status: "MIEMBRO"
           },
         }
       }
@@ -93,7 +95,8 @@ export class RoomService {
           {
             users: {
               some: {
-                user_id: userId
+                user_id: userId,
+                status: "MIEMBRO"
               }
             }
           }
@@ -146,6 +149,7 @@ export class RoomService {
         users:{
           create: {
             user_id: findeUser.id,
+            status: "MIEMBRO",
           }
         },
       }
@@ -173,13 +177,23 @@ export class RoomService {
         ]
       }
     })
-    if(findRoomName.length)
-      throw new BadRequestException("Ingrese otro nombre")
+
+    if (findRoomName.length) {
+      throw new BadRequestException("Ya existe otra sala con ese nombre");
+    }
 
     const findUserRoom = await this.userRoomService.findUserRoom(
         findUser.id,
         findIdRoom.id
     );
+
+    if (!findUserRoom) {
+      throw new BadRequestException("No tienes acceso a esta sala");
+    }
+
+    if (findUserRoom.status !== "MIEMBRO") {
+      throw new BadRequestException("No tienes acceso activo a esta sala");
+    }
 
     const updateRoom = await this.prismaService.room.update({
       where: {
@@ -187,7 +201,8 @@ export class RoomService {
       },
       data: {
         name: createRoomDto.name,
-        description: createRoomDto.description
+        description: createRoomDto.description,
+        maxMembers: createRoomDto.maxMembers,
       }
     })
 

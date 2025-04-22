@@ -21,7 +21,7 @@ export interface IResponseRoomAll {
   createdBy:    string;
   createdAt:    Date;
   updatedAt:    Date;
-  users:        IUsersRoomRole[];
+  // users:        IUsersRoomRole[];
 }
 
 interface IUsersRoomRole {
