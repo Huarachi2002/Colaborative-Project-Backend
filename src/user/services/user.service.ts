@@ -124,7 +124,6 @@ export class UserService {
   }
 
   public async updatedUser(id:string, userUpdateDto: UserUpdatedDto): Promise<User> {
-    const findUser = await this.findIdUser(id);
 
     const updatedUser = await this.prismaService.user.update({
       where:{
@@ -132,7 +131,7 @@ export class UserService {
       },
       data: {
         email: userUpdateDto.email,
-        username: userUpdateDto.username        
+        username: userUpdateDto.name        
       }
     });
 
@@ -142,8 +141,10 @@ export class UserService {
   public async updatedPassword(id: string, updPass: UpdatedUserPassDto): Promise<User> {
     const findUser = await this.findIdUser(id);
 
+    console.log("findUser", findUser.password);
+    console.log("updPass", updPass.password);
     const validatePass = bcrypt.compareSync(updPass.password, findUser.password);
-
+    
     if(!validatePass)
       throw new BadRequestException("La contraseña no coinciden");
 

@@ -84,11 +84,13 @@ export class UserRoomService {
 
       
       const findUserRoom = await this.findUserRoom(findUser.id, findRoom.id);
-      if(findUserRoom.status === "BLOCKED"){
-        throw new BadRequestException("El usuario está bloqueado en esta sala.");
-      }
-      
       if (findUserRoom) {
+        // Si existe, verificar su estado
+        if (findUserRoom.status === "BLOCKED") {
+          throw new BadRequestException("El usuario está bloqueado en esta sala.");
+        }
+        
+        // El usuario ya pertenece a la sala con otro estado
         throw new BadRequestException("El usuario ya pertenece a esta sala.");
       }
 

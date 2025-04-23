@@ -17,15 +17,14 @@ export class UserController {
     private readonly userRoomService: UserRoomService
   ){}
 
-  @Put("updated")
+  @Put(":userId")
   @HttpCode(HttpStatus.OK)
   public async updatedUser(
     @Body() userUpdate: UserUpdatedDto,
-    @Req() req: Request
+    @Param('userId', ParseUUIDPipe) userId: string,
   ) : Promise<IApiResponse<IResponseUser>> {
-    const {UserId} = req;
     const statusCode = HttpStatus.OK;
-    const updatedUser = await this.userService.updatedUser(UserId,userUpdate);
+    const updatedUser = await this.userService.updatedUser(userId,userUpdate);
 
     return {
        statusCode,
@@ -92,21 +91,21 @@ export class UserController {
     };
   }
 
-  @Put("updated-pass")
+  @Put('password/:userId')
   @HttpCode(HttpStatus.OK)
-  public async updatedPass(
-    @Body() updsPass: UpdatedUserPassDto,
-    @Req() req: Request
-  ): Promise<IApiResponse<IResponseUser>>{
-    const {UserId} = req;
+  public async updatedUserPassword(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() updPass: UpdatedUserPassDto
+  ): Promise<IApiResponse<IResponseUser>> {
     const statusCode = HttpStatus.OK;
-    const updPass = await this.userService.updatedPassword(UserId,updsPass);
+    const updatedPass = await this.userService.updatedPassword(userId,updPass);
     return {
       statusCode,
-      message: "Password actualizado",
+      message: "Contraseña actualizada",
       data: {
-        user: updPass
+        user: updatedPass
       }
     }
-  } 
+  }
+
 }
