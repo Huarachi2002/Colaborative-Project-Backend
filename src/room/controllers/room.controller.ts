@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { IApiResponse } from 'src/common/interface';
 import { IResponseRoom, IResponseRoomId, IResponseRooms } from '../interfaces';
 import { Request } from 'express';
@@ -6,6 +6,7 @@ import { QueryCommonDto } from 'src/common/dto';
 import { RoomService } from '../services';
 import { CreateRoomDto } from '../dto';
 import { AuthTokenGuard } from 'src/auth/guard';
+import { UpdateRoomDto } from '../dto/update-room.dto';
 
 @Controller('room')
 @UseGuards(AuthTokenGuard)
@@ -61,7 +62,7 @@ export class RoomController {
 
     return {
       statusCode,
-      message: "La sala con todos los usuarios",
+      message: "Sala encontrada",
       data: {
         room: findRoom
       }
@@ -84,22 +85,54 @@ export class RoomController {
         room 
       }
     }
-  
   }
 
-  @Patch(':id')
+  @Get('validate-code/:code')
+  @HttpCode(HttpStatus.OK)
+  public async validateCodeRoom(
+    @Param('code') code: string,
+  ): Promise<IApiResponse<IResponseRoom>>{
+    const statusCode = HttpStatus.OK;
+    const room = await this.roomService.validateCodeRoom(code);
+
+    return {
+      statusCode,
+      message: "Codigo de la sala",
+      data: {
+        room
+      }
+    }
+  }
+
+  @Put(':id')
   @HttpCode(HttpStatus.OK)
   public async updateRoom(
     @Param("id", ParseIntPipe) id: number,
-    @Req() req: Request,
-    @Body() createRoomDto:CreateRoomDto
+    @Body() createRoomDto:UpdateRoomDto
   ): Promise<IApiResponse<IResponseRoom>> {
     const statusCode = HttpStatus.OK;
-    const {UserId} = req;
-    const room = await this.roomService.updateRoom(id,createRoomDto,UserId);
+    const room = await this.roomService.updateRoom(id,createRoomDto);
     return {
       statusCode,
       message: "Sala actualizada",
+      data: {
+        room
+      }
+    }
+  }
+
+  @Put(':idRoom/collaborators/:idUser')
+  @HttpCode(HttpStatus.OK)
+  public async removeUserToRoom(
+    @Param("idRoom", ParseIntPipe) idRoom: number,
+    @Param("idUser", ParseUUIDPipe) idUser: string
+  ): Promise<IApiResponse<IResponseRoom>> {
+    const statusCode = HttpStatus.OK;
+    const room = await this.roomService.removeUserToRoom(idRoom,idUser);
+
+    return {
+      statusCode,
+      message: "Colaborador eliminado",
       data: {
         room
       }

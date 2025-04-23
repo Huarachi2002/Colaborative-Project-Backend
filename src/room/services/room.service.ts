@@ -6,6 +6,7 @@ import { CreateRoomDto } from '../dto';
 import { UserService } from 'src/user/services';
 import { UserRoomService } from './user-room.service';
 import { IResponseRoomAll } from '../interfaces';
+import { UpdateRoomDto } from '../dto/update-room.dto';
 
 @Injectable()
 export class RoomService {
@@ -26,6 +27,20 @@ export class RoomService {
       codigo += this.characteres[indiceAleatorio];
     }
     return codigo.toUpperCase();
+  }
+
+  public async validateCodeRoom(code: string): Promise<Room> {
+    const findRoom = await this.prismaService.room.findFirst({
+      where: {
+        code
+      }
+    });
+
+    if (!findRoom) {
+      throw new BadRequestException("El código de la sala no es válido");
+    }
+
+    return findRoom;
   }
 
   public async findAll(
@@ -49,7 +64,9 @@ export class RoomService {
             users: {
               some: {
                 user_id: userId,
-                status: "MIEMBRO"
+                status: {
+                  in: ["OWNER", "INVITADO"]
+                }
               }
             }
           },
@@ -70,7 +87,9 @@ export class RoomService {
         users: {
           where: {
             user_id: userId,
-            status: "MIEMBRO"
+            status: {
+              in: ["OWNER", "INVITADO"]
+            }
           },
         }
       }
@@ -96,7 +115,9 @@ export class RoomService {
             users: {
               some: {
                 user_id: userId,
-                status: "MIEMBRO"
+                status: {
+                  in: ["OWNER", "INVITADO"]
+                }
               }
             }
           }
@@ -106,6 +127,10 @@ export class RoomService {
     return findAllRoom;
   }
 
+  public async removeUserToRoom(idRoom: number, userId: string): Promise<any> {
+    const user_rooms =  await this.userRoomService.blockedUserToRoom(idRoom, userId);
+    return user_rooms;
+  }
 
   public async findIdRoom(id: number, select?: Prisma.RoomSelect): Promise<any> {
     const findRoom = await this.prismaService.room.findUnique({
@@ -149,7 +174,7 @@ export class RoomService {
         users:{
           create: {
             user_id: findeUser.id,
-            status: "MIEMBRO",
+            status: "OWNER",
           }
         },
       }
@@ -158,9 +183,7 @@ export class RoomService {
     return createRoom;
   }
 
-  public async updateRoom(id:number, createRoomDto:CreateRoomDto, userId: string): Promise<Room>{
-    const findUser = await this.userService.findIdUser(userId);
-
+  public async updateRoom(id:number, createRoomDto:UpdateRoomDto): Promise<Room>{
     const findIdRoom = await this.findIdRoom(id);
 
     const findRoomName = await this.prismaService.room.findMany({
@@ -172,7 +195,7 @@ export class RoomService {
             }
           },
           {
-            name: createRoomDto.name
+            name: createRoomDto.name,
           }
         ]
       }
@@ -180,19 +203,6 @@ export class RoomService {
 
     if (findRoomName.length) {
       throw new BadRequestException("Ya existe otra sala con ese nombre");
-    }
-
-    const findUserRoom = await this.userRoomService.findUserRoom(
-        findUser.id,
-        findIdRoom.id
-    );
-
-    if (!findUserRoom) {
-      throw new BadRequestException("No tienes acceso a esta sala");
-    }
-
-    if (findUserRoom.status !== "MIEMBRO") {
-      throw new BadRequestException("No tienes acceso activo a esta sala");
     }
 
     const updateRoom = await this.prismaService.room.update({

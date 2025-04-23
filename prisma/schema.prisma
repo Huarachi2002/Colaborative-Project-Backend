@@ -30,7 +30,7 @@ model User_Room{
   user_id        String @db.Uuid 
   user           User   @relation(references: [id], fields: [user_id])
   
-  status       String @db.VarChar(20) @default("INVITATION") // MIEMBRO, INVITATION, REFUSED, BLOCKED  
+  status       String @db.VarChar(20) // OWNER, INVITADO, REFUSED, BLOCKED  
 
   room_id        Int    @db.Integer
   room           Room   @relation(references: [id], fields: [room_id])

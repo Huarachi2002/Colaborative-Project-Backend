@@ -5,6 +5,7 @@ import { RoomService } from './room.service';
 import { Room, User, User_Room } from '@prisma/client';
 import { AddUserRoomDto, RemovedUserRoomDto } from '../dto';
 import { MailService } from 'src/mail/services';
+import { InvitedUserRoomDto } from '../dto/invited-user-room.dto';
 
 @Injectable()
 export class UserRoomService {
@@ -42,7 +43,9 @@ export class UserRoomService {
       where: {
         room_id: roomId,
         user_id: userId,
-        status: "MIEMBRO"
+        status: {
+          in: ["OWNER", "INVITADO"]
+        }
       }
     });
     return !!userRoom;
@@ -54,7 +57,9 @@ export class UserRoomService {
         users: {
           some: {
             user_id: userId,
-            status: "MIEMBRO"
+            status: {
+              in: ["OWNER", "INVITADO"]
+            }
           }
         }
       }
@@ -63,70 +68,161 @@ export class UserRoomService {
   
   }
 
-  public async invitationUserRoom(
+  public async addUserRoom(
     addUserRoomDto: AddUserRoomDto,
-    // roomId: number
+  ): Promise<void> {
+    try {
+      const { idRoom, idUser } = addUserRoomDto;
+      const findUser = await this.userService.findIdUser(idUser);
+      if (!findUser) {
+        throw new NotFoundException("El usuario no existe.");
+      }
+      const findRoom = await this.roomService.findIdRoom(idRoom);
+      if (!findRoom) {
+        throw new NotFoundException("La sala no existe.");
+      }
+
+      
+      const findUserRoom = await this.findUserRoom(findUser.id, findRoom.id);
+      if(findUserRoom.status === "BLOCKED"){
+        throw new BadRequestException("El usuario está bloqueado en esta sala.");
+      }
+      
+      if (findUserRoom) {
+        throw new BadRequestException("El usuario ya pertenece a esta sala.");
+      }
+
+      const roomFull = await this.countUsersInRoom(findRoom.id);
+      if (roomFull >= findRoom.maxMembers) {
+        throw new BadRequestException("La sala está llena.");
+      }
+      
+      await this.prismaService.user_Room.create({
+        data: {
+          user_id: findUser.id,
+          room_id: findRoom.id,
+          status: "INVITADO"
+        }
+      });
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException(error.message);
+      } else if (error instanceof BadRequestException) {
+        throw new BadRequestException(error.message);
+      } else {
+        throw new InternalServerErrorException("Ocurrió un error inesperado", error);
+      }
+    }
+  }
+
+  public async countUsersInRoom(roomId: number): Promise<number> {
+    const count = await this.prismaService.user_Room.count({
+      where: {
+        room_id: roomId,
+        status: {
+          in: ["OWNER", "INVITADO"]
+        }
+      }
+    });
+    return count;
+  }
+
+  public async invitationUserRoom(
+    addUserRoomDto: InvitedUserRoomDto,
   ): Promise<void>{
-    // const findUser = await this.userService.findIdUser(addUserRoomDto.userId);
-    // const findRoom =  await this.roomService.findIdRoom(roomId);
-
-    // const finduserRoom = await this.findUserRoom(findUser.id,findRoom.id);
-    
-    // let existUserRoom: Boolean = finduserRoom != null;
-
-    // if (existUserRoom && finduserRoom.status === "MIEMBRO") {
-    //   throw new BadRequestException("El usuario ya se encuentra activo en la sala");
-    // }
     try {
       const {emails, name} = addUserRoomDto;
       
-        emails.forEach(async (email) => {
-          await this.mailService.sendInvitationRoom(
-            {
-              code: addUserRoomDto.code,
-              email,
-              name
-            }
-          )
-        });
-        
-
-        // let createInvitationRoom: User_Room ;
-
-        // createInvitationRoom = await t.user_Room.create({
-        //   data: {
-        //     room_id: findRoom.id,
-        //     user_id: findUser.id,
-        //   }
-        // });
-
-        // if (existUserRoom) {
-        //   // Si ya existe una relación, actualizar su estado
-        //   createInvitationRoom = await t.user_Room.update({
-        //     where: {
-        //       user_id_room_id: {
-        //         user_id: findUser.id,
-        //         room_id: findRoom.id
-        //       }
-        //     },
-        //     data: {
-        //       status: "INVITATION"
-        //     }
-        //   });
-        // } else {
-        //   // Si no existe, crear una nueva relación
-        //   createInvitationRoom = await t.user_Room.create({
-        //     data: {
-        //       room_id: findRoom.id,
-        //       user_id: findUser.id,
-        //       status: "INVITATION" 
-        //     }
-        //   });
-        // }
+      emails.forEach(async (email) => {
+        await this.mailService.sendInvitationRoom(
+          {
+            code: addUserRoomDto.code,
+            email,
+            name
+          }
+        )
+      });
 
     } catch (err) {
       throw new InternalServerErrorException("Ocurrio un error inesperador: ", err)
     }
+  }
+
+  public async findRoomsCreatedByUserId(userId: string): Promise<any[]> {
+    const findRooms = await this.prismaService.room.findMany({
+      where: {
+        users: {
+          some: {
+            user_id: userId,
+            status: "OWNER"
+          }
+        },
+      },
+      include: {
+        users: {
+          where: {
+            status: {
+              in: ["OWNER", "INVITADO"]
+            }
+          },
+          include: {
+            user: true // Include user details
+          }
+        },
+        _count: {
+          select: { 
+            users: true 
+          }
+        }
+      }
+    });
+    
+    // Calculate active users count for each room
+    const roomsWithUserInfo = findRooms.map(room => ({
+      ...room,
+      activeUserCount: room.users.length,
+    }));
+
+    return roomsWithUserInfo;
+  }
+
+  public async findRoomsInvitedByUserId(userId: string,): Promise<any[]> {
+    const findRooms = await this.prismaService.room.findMany({
+      where: {
+        users: {
+          some: {
+            user_id: userId,
+            status: "INVITADO"
+          }
+        }
+      },
+      include: {
+        users: {
+          where: {
+            status: {
+              in: ["OWNER", "INVITADO"]
+            }
+          },
+          include: {
+            user: true // Include user details
+          }
+        },
+        _count: {
+          select: { 
+            users: true 
+          }
+        }
+      }
+    });
+    
+    // Calculate active users count for each room
+    const roomsWithUserInfo = findRooms.map(room => ({
+      ...room,
+      activeUserCount: room.users.length,
+    }));
+
+    return roomsWithUserInfo;
   }
 
   public async findActiveUserRoom(roomId: number,): Promise<User[]> {
@@ -135,7 +231,9 @@ export class UserRoomService {
         rooms: {
           some: {
             room_id: roomId,
-            status: "MIEMBRO"
+            status: {
+              in: ["OWNER", "INVITADO"]
+            }
           }
         }
       }
@@ -179,23 +277,19 @@ export class UserRoomService {
   //   return updatedUserRoom;
   // }
 
-  public async blockedUserToRoom(roomId: number, userToExcludeId: string, currentUserId: string): Promise<User_Room>{
+  public async blockedUserToRoom(roomId: number, userToExcludeId: string): Promise<User_Room>{
     // Verify if the room exists
     const findIdRoom = await this.roomService.findIdRoom(roomId);
-    
-    // Verify if current user exists and has permission
-    const currentUser = await this.userService.findIdUser(currentUserId);
-    const currentUserRoom = await this.findUserRoom(
-      currentUser.id,
-      findIdRoom.id
-    );
-
-    if (!currentUserRoom || currentUserRoom.status !== "MIEMBRO") {
-      throw new BadRequestException("No tienes permisos para excluir usuarios de esta sala");
+    if (!findIdRoom) {
+      throw new NotFoundException("La sala no existe");
     }
 
     // Verify if user to exclude exists and is in the room
     const userToExclude = await this.userService.findIdUser(userToExcludeId);
+    if (!userToExclude) {
+      throw new NotFoundException("El usuario no existe");
+    }
+    // Verify if user to exclude is in the room
     const userToExcludeRoom = await this.findUserRoom(
       userToExclude.id,
       findIdRoom.id
@@ -225,12 +319,12 @@ export class UserRoomService {
   ): Promise<User_Room>{
     const findUserRoom = await this.findUserRoom(user_id,room_id);
 
-    if(!findUserRoom)
-      throw new NotFoundException("El usuario no tiene ninguna invitacion.");
+    // if(!findUserRoom)
+    //   throw new NotFoundException("El usuario no tiene ninguna invitacion.");
 
-    if (findUserRoom.status !== "INVITATION") {
-      throw new BadRequestException("No hay una invitación pendiente para este usuario");
-    }
+    // if (findUserRoom.status !== "INVITADO") {
+    //   throw new BadRequestException("No hay una invitación pendiente para este usuario");
+    // }
 
     const updatedUserRoom = await this.prismaService.user_Room.update({
       where: {
@@ -259,9 +353,9 @@ export class UserRoomService {
       throw new BadRequestException("El usuario no pertenece a esta sala");
     }
 
-    if (findUserRoom.status !== "MIEMBRO") {
-      throw new BadRequestException("El usuario no está activo en esta sala");
-    }
+    // if (findUserRoom.status === "BLOCKED") {
+    //   throw new BadRequestException("El usuario no está activo en esta sala");
+    // }
 
     const updatedUserRoom = await this.prismaService.user_Room.update({
       where: {

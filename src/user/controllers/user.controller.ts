@@ -55,6 +55,43 @@ export class UserController {
     };
   }
 
+  @Get(':userId/rooms-created')
+  @HttpCode(HttpStatus.OK)
+  public async getUserRoomsCreated(
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<IApiResponse<IResponseRooms>> {
+    const statusCode = HttpStatus.OK;
+    
+    const rooms = await this.userRoomService.findRoomsCreatedByUserId(userId);
+    return {
+      statusCode,
+      message: "Salas creadas por el usuario",
+      data: {
+        total: rooms.length,
+        rooms
+      }
+    };
+  }
+
+  @Get(':userId/rooms-invited')
+  @HttpCode(HttpStatus.OK)
+  public async getUserRoomsInvited(
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<IApiResponse<IResponseRooms>> {
+    const statusCode = HttpStatus.OK;
+    
+    const rooms = await this.userRoomService.findRoomsInvitedByUserId(userId);
+
+    return {
+      statusCode,
+      message: "Salas del usuario que fue invitado",
+      data: {
+        total: rooms.length,
+        rooms
+      }
+    };
+  }
+
   @Put("updated-pass")
   @HttpCode(HttpStatus.OK)
   public async updatedPass(

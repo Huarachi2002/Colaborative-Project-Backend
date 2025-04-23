@@ -1,14 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/auth/guard';
-import { QueryCommonDto } from 'src/common/dto';
 import { IApiResponse } from 'src/common/interface';
-import { IResponseUsers } from 'src/user/interface';
 import { UserService } from 'src/user/services';
-import { AddUserRoomDto, RemovedUserRoomDto } from '../dto';
+import { AddUserRoomDto } from '../dto';
 import { UserRoomService } from '../services';
 import { RoomRoleGuard } from 'src/auth/guard/room-role.guard';
-import { IReponseUserRoom, IResponseRooms } from '../interfaces';
+import { InvitedUserRoomDto } from '../dto/invited-user-room.dto';
 
 @Controller('user-room')
 @UseGuards(AuthTokenGuard)
@@ -25,12 +22,12 @@ export class UserRoomController {
 
   @Post("invitation")
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(RoomRoleGuard)
+  // @UseGuards(RoomRoleGuard)
   public async sendInivitationUserRoom(
-    @Body() addUserRoomDto:AddUserRoomDto,
+    @Body() invitedUserRoomDto:InvitedUserRoomDto,
   ): Promise<IApiResponse<any>> {
       const statusCode = HttpStatus.CREATED;
-      await this.userRoomService.invitationUserRoom(addUserRoomDto);
+      await this.userRoomService.invitationUserRoom(invitedUserRoomDto);
       return {
         statusCode,
         message: "Invitacion enviada con exito.",
@@ -38,6 +35,20 @@ export class UserRoomController {
       }
   }
 
+  @Post("join-room")
+  @HttpCode(HttpStatus.CREATED)
+  public async joinRoom(
+    @Body() addUserRoomDto: AddUserRoomDto,
+  ): Promise<IApiResponse<any>> {
+    const statusCode = HttpStatus.CREATED;
+    await this.userRoomService.addUserRoom(addUserRoomDto);
+
+    return {
+      statusCode,
+      message: "Usuario agregado a la sala",
+      data: null
+    };
+  }
 
   // @Put("accept-invitation")
   // @HttpCode(HttpStatus.ACCEPTED)

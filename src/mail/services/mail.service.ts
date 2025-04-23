@@ -16,11 +16,12 @@ export class MailService {
     const url = this.configService.get<string>("url_frontend");
     await this.mailerService.sendMail({
       to: invitation.email,
-      subject: `Invitacion para unirse a un sala de diseño UI/UX. \n Utilice este codigo para unirse a la sala (${invitation.code}).`,
+      subject: 'Invitacion para unirse a un sala de diseño UI/UX.',
       template: "./invitation",
       context: {
         roomName: invitation.name,
-        acceptUrl: `${url}/login`
+        acceptUrl: `${url}/login`,
+        code: invitation.code,
       }
     })
   }
