@@ -29,6 +29,15 @@ export class RoomService {
     return codigo.toUpperCase();
   }
 
+  public async getRoomByName(name: string) :Promise<Room>{
+    const room = await this.prismaService.room.findFirst({
+      where: {
+        name: name
+      }
+    });
+    return room;
+  }
+
   public async validateCodeRoom(code: string): Promise<Room> {
     const findRoom = await this.prismaService.room.findFirst({
       where: {
@@ -127,8 +136,12 @@ export class RoomService {
     return findAllRoom;
   }
 
-  public async removeUserToRoom(idRoom: number, userId: string): Promise<any> {
-    const user_rooms =  await this.userRoomService.blockedUserToRoom(idRoom, userId);
+  public async removeUserToRoom(idRoom: number, email: string): Promise<any> {
+    const user = await this.userService.findUserEmail(email);
+    if(!user)
+      throw new NotFoundException("El usuario no existe")
+
+    const user_rooms =  await this.userRoomService.blockedUserToRoom(idRoom, user.id);
     return user_rooms;
   }
 

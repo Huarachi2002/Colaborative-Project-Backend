@@ -1,7 +1,5 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import axios from 'axios';
 
 interface Element {
@@ -45,7 +43,7 @@ export class AiProcessingService {
                                     "top": [posición Y],
                                     "width": [ancho],
                                     "height": [alto],
-                                    "fill": "#aabbcc",
+                                    "fill": [color hexadecimal],
                                     "objectId": "[id único]"
                                 }
                                 
@@ -55,7 +53,7 @@ export class AiProcessingService {
                                     "left": [posición X],
                                     "top": [posición Y],
                                     "radius": [radio],
-                                    "fill": "#aabbcc",
+                                    "fill": [color hexadecimal],
                                     "objectId": "[id único]"
                                 }
                                 
@@ -66,7 +64,7 @@ export class AiProcessingService {
                                     "top": [posición Y],
                                     "width": [ancho],
                                     "height": [alto],
-                                    "fill": "#aabbcc",
+                                    "fill": [color hexadecimal],
                                     "objectId": "[id único]"
                                 }
                                 
@@ -74,7 +72,7 @@ export class AiProcessingService {
                                 {
                                     "type": "line",
                                     "points": [[x1], [y1], [x2], [y2]],
-                                    "stroke": "#aabbcc",
+                                    "stroke": [color hexadecimal],
                                     "strokeWidth": 2,
                                     "objectId": "[id único]"
                                 }
@@ -85,10 +83,20 @@ export class AiProcessingService {
                                     "left": [posición X],
                                     "top": [posición Y],
                                     "text": [texto detectado],
-                                    "fill": "#aabbcc",
+                                    "fill": [color hexadecimal],
                                     "fontFamily": "Helvetica",
                                     "fontSize": 36,
                                     "fontWeight": "400",
+                                    "objectId": "[id único]"
+                                }
+
+                                6. PATH (dibujo a mano alzada):
+                                {
+                                    "type": "path",
+                                    "path": [string de datos SVG path],
+                                    "fill": [color hexadecimal],
+                                    "stroke": [color hexadecimal],
+                                    "strokeWidth": [ancho de línea],
                                     "objectId": "[id único]"
                                 }
                                 

@@ -121,14 +121,14 @@ export class RoomController {
     }
   }
 
-  @Put(':idRoom/collaborators/:idUser')
+  @Put(':idRoom/collaborators/:email')
   @HttpCode(HttpStatus.OK)
   public async removeUserToRoom(
     @Param("idRoom", ParseIntPipe) idRoom: number,
-    @Param("idUser", ParseUUIDPipe) idUser: string
+    @Param("email") email: string
   ): Promise<IApiResponse<IResponseRoom>> {
     const statusCode = HttpStatus.OK;
-    const room = await this.roomService.removeUserToRoom(idRoom,idUser);
+    const room = await this.roomService.removeUserToRoom(idRoom,email);
 
     return {
       statusCode,

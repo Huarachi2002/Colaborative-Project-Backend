@@ -4,7 +4,6 @@ import { UserService } from '../services';
 import { IApiResponse } from 'src/common/interface';
 import { IResponseUser } from '../interface';
 import { UpdatedUserPassDto, UserUpdatedDto } from '../dto';
-import { Request } from 'express';
 import { IResponseRooms } from 'src/room/interfaces';
 import { UserRoomService } from 'src/room/services';
 
@@ -33,6 +32,29 @@ export class UserController {
         user: updatedUser
        }
     }
+  }
+
+  @Get("email/:email")
+  @HttpCode(HttpStatus.OK)
+  public async findUserByEmail(
+    @Param('email') email: string,
+  ): Promise<IApiResponse<IResponseUser>> {
+    const statusCode = HttpStatus.OK;
+    const user = await this.userService.findUserEmail(email);
+    if (!user) {
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: "Usuario no encontrado",
+        data: null
+      };
+    }
+    return {
+      statusCode,
+      message: "Usuario encontrado",
+      data: {
+        user
+      }
+    };
   }
 
   @Get(":userId/rooms")

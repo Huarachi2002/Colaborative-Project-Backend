@@ -35,6 +35,16 @@ export class UserRoomService {
     return findUserRoom;
   }  
 
+  public async findRoomByIdRoom (idRoom: string): Promise<Room> {
+    const findRoom = await this.prismaService.room.findFirst({
+      where: {
+        idRoom: idRoom
+      }
+    });
+    return findRoom;
+
+  }
+
   public async hasAccessToRoom(
     userId: string,
     roomId: number
@@ -118,6 +128,24 @@ export class UserRoomService {
     }
   }
 
+  public async validateJoinRoom(idRoom: number , idUser: string): Promise<boolean>{
+    const validateJoin = await this.prismaService.user_Room.findFirst({
+      where: {
+        room_id: Number(idRoom),
+        user_id: idUser,
+        status: {
+          in: ["OWNER", "INVITADO"]
+        }
+      }
+    });
+
+    if(validateJoin){
+      return true;
+    }else{
+      return false;
+    } 
+  }
+
   public async countUsersInRoom(roomId: number): Promise<number> {
     const count = await this.prismaService.user_Room.count({
       where: {
@@ -130,16 +158,46 @@ export class UserRoomService {
     return count;
   }
 
+  public async changeUserRoomStatus(
+    userId: string,
+    roomId: number,
+    status: string
+  ): Promise<any> {
+    const findUserRoom = await this.findUserRoom(userId, roomId);
+    if (!findUserRoom) {
+      return
+    }
+
+    await this.prismaService.user_Room.update({
+      where: {
+        user_id_room_id: {
+          user_id: findUserRoom.user_id,
+          room_id: findUserRoom.room_id
+        }
+      },
+      data: {
+        status
+      }
+    });
+
+  }
+
   public async invitationUserRoom(
-    addUserRoomDto: InvitedUserRoomDto,
+    invitedUserRoomDto: InvitedUserRoomDto,
   ): Promise<void>{
     try {
-      const {emails, name} = addUserRoomDto;
+      const {emails, name} = invitedUserRoomDto;
       
       emails.forEach(async (email) => {
+        const user = await this.userService.findUserEmail(email)
+        const room = await this.roomService.getRoomByName(name);
+
+        if(user){
+          await this.changeUserRoomStatus(user.id, room.id, "INVITADO")
+        }
         await this.mailService.sendInvitationRoom(
           {
-            code: addUserRoomDto.code,
+            code: invitedUserRoomDto.code,
             email,
             name
           }
