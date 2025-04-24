@@ -6,5 +6,6 @@ export const EnvConfig = ():any => ({
   account_email: process.env.ACCOUNT_EMAIL,
   pass_email: process.env.PASSWORD_EMAIL,
   host_email: process.env.HOST_EMAIL,
-  url_frontend: process.env.URL_FRONTEND
+  url_frontend: process.env.URL_FRONTEND,
+  openai_api_key: process.env.OPENAI_API_KEY
 })

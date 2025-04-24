@@ -3,7 +3,6 @@ import { ConfigService } from "@nestjs/config";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import axios from 'axios';
-import { createCanvas } from 'canvas';
 
 interface Element {
     type: string;
@@ -28,14 +27,72 @@ export class AiProcessingService {
             const response = await axios.post(
                 'https://api.openai.com/v1/chat/completions',
                 {
-                    model: 'gpt-4-vision-preview',
-                    message: [
+                    model: 'gpt-4o',
+                    messages: [
                         {
                             role: 'user',
                             content: [
                                 {
                                     type: 'text',
-                                    text: "Analiza esta imagen y detecta los elementos de diseño (rectángulos, círculos, líneas, textos, etc.). Devuelve una respuesta JSON con un array de elementos detectados. Cada elemento debe tener type, x, y, y otras propiedades específicas según el tipo. Por ejemplo, un rectángulo debe tener width y height. Asegúrate que el JSON sea válido y sin explicaciones adicionales."
+                                    text: `Analiza esta imagen de boceto y detecta los elementos para convertirlos en objetos Fabric.js. Crea un JSON con un array 'elements' que contenga todos los objetos detectados. 
+                  
+                                Cada objeto debe seguir exactamente este formato según su tipo:
+                                
+                                1. RECTÁNGULO:
+                                {
+                                    "type": "rectangle",
+                                    "left": [posición X],
+                                    "top": [posición Y],
+                                    "width": [ancho],
+                                    "height": [alto],
+                                    "fill": "#aabbcc",
+                                    "objectId": "[id único]"
+                                }
+                                
+                                2. CÍRCULO:
+                                {
+                                    "type": "circle",
+                                    "left": [posición X],
+                                    "top": [posición Y],
+                                    "radius": [radio],
+                                    "fill": "#aabbcc",
+                                    "objectId": "[id único]"
+                                }
+                                
+                                3. TRIÁNGULO:
+                                {
+                                    "type": "triangle",
+                                    "left": [posición X],
+                                    "top": [posición Y],
+                                    "width": [ancho],
+                                    "height": [alto],
+                                    "fill": "#aabbcc",
+                                    "objectId": "[id único]"
+                                }
+                                
+                                4. LÍNEA:
+                                {
+                                    "type": "line",
+                                    "points": [[x1], [y1], [x2], [y2]],
+                                    "stroke": "#aabbcc",
+                                    "strokeWidth": 2,
+                                    "objectId": "[id único]"
+                                }
+                                
+                                5. TEXTO:
+                                {
+                                    "type": "text",
+                                    "left": [posición X],
+                                    "top": [posición Y],
+                                    "text": [texto detectado],
+                                    "fill": "#aabbcc",
+                                    "fontFamily": "Helvetica",
+                                    "fontSize": 36,
+                                    "fontWeight": "400",
+                                    "objectId": "[id único]"
+                                }
+                                
+                                Devuelve solo el JSON válido, sin texto adicional.`
                                 },
                                 {
                                     type: 'image_url',
@@ -80,63 +137,4 @@ export class AiProcessingService {
         }
     }
 
-    async generatePreview(elements: Element[], outputPath: string): Promise<void>{
-        // Crear un canvas para la vista previa
-
-        const canvas = createCanvas(800, 600);
-        const ctx = canvas.getContext('2d');
-
-        // Fondo blanco
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 800, 600);
-
-        // Renderizar elementos
-        elements.forEach(element => {
-            this.renderElement(ctx, element);
-        });
-
-        // Asegurarse de que el directorio existe
-        await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
-        // Guardar la imagen
-        const buffer = canvas.toBuffer('image/png');
-        await fs.writeFile(outputPath, buffer);
-    }
-
-    private renderElement(ctx: any, element: Element): void {
-        ctx.beginPath();
-        ctx.fillStyle = element.strokeColor || '#000000';
-        ctx.lineWidth = element.strokeWidth || 2;
-
-        switch (element.type) {
-            case 'rectangle':
-                ctx.react(element.x, element.y, element.width, element.height);
-                break;
-            case 'circle':
-                ctx.arc(
-                    element.x + element.radius,
-                    element.y + element.radius,
-                    element.radius,
-                    0,
-                    Math.PI * 2
-                );
-                break;
-            case 'line':
-                ctx.moveTo(element.x1 || element.x, element.y1 || element.y);
-                ctx.lineTo(element.x2, element.y2);
-                break;
-            case 'text':
-                ctx.font = `${element.fontSize || 16}px sans-serif`;
-                ctx.fillStyle = element.color|| '#000';
-                ctx.fillText(element.text, element.x, element.y);
-                return;
-        }
-
-        if(element.fill){
-            ctx.fillStyle = element.fillColor || '#fff';
-            ctx.fill();
-        }
-
-        ctx.stroke();
-    }
 }

@@ -7,6 +7,7 @@ import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { RoomModule } from './room/room.module';
 import { MailModule } from './mail/mail.module';
+import { ImportModule } from './import/import.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MailModule } from './mail/mail.module';
     AuthModule,
     RoomModule,
     MailModule,
+    ImportModule,
   ],
   controllers: [],
   providers: [],

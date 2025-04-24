@@ -6,12 +6,13 @@ import { Request } from 'express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { AiProcessingService } from "../services/ai-processing.service";
 
 
 @Controller("import")
 @UseGuards(AuthTokenGuard)
 export class ImportController {
-    constructor(private readonly importService: ImportService) {}
+    constructor(private readonly aiProcessingService: AiProcessingService) {}
 
     @Post("sketch")
     @HttpCode(HttpStatus.OK)
@@ -39,7 +40,7 @@ export class ImportController {
           },
         }),
       )
-      async importSketch(
+      async processSketch(
         @UploadedFile() file: Express.Multer.File,
         @Req() req: Request,
       ): Promise<IApiResponse<any>>{
@@ -47,19 +48,34 @@ export class ImportController {
           throw new BadRequestException('No se ha subido ningún archivo');
         }
         const statusCode = HttpStatus.OK;
-        const userId = req.UserId;
-        const importId = await this.importService.processSketch(file, userId);
-        return {
-            statusCode,
-            message: 'Archivo subido y procesado correctamente',
-            data: {importId}
+
+        try {
+          // Leer la imagen del archivo
+          const fs = require('fs');
+          const imageBuffer = fs.readFileSync(file.path);
+          
+          // Procesar la imagen con IA
+          const result = await this.aiProcessingService.processSketch(imageBuffer);
+
+          // Opcionalmente eliminar el archivo temporal
+          fs.unlink(file.path, (err) => {
+            if (err) console.error('Error al eliminar archivo temporal:', err);
+          });
+          
+          // Devolver los elementos detectados directamente
+          return {
+              statusCode,
+              message: 'Archivo subido y procesado correctamente',
+              data: {
+                elements: result.elements
+              }
+          }
+        } catch (error) {
+          console.error('Error processing sketch:', error);
+          throw new BadRequestException('Error al procesar el boceto: ' + error.message);
         }
 
       }
 
-      @Get('result/:id')
-      async getImportResult(@Param('id') importId: string) {
-        const result = await this.importService.getImportResult(importId);
-        return result;
-      }
+      
 }

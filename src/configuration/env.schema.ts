@@ -7,5 +7,6 @@ export const envSchema = Joi.object({
   ACCOUNT_EMAIL: Joi.string().required(),
   PASSWORD_EMAIL: Joi.string().required(),
   HOST_EMAIL: Joi.string().required(),
-  URL_FRONTEND: Joi.string().required()
+  URL_FRONTEND: Joi.string().required(),
+  OPENAI_API_KEY: Joi.string().required()
 })
