@@ -117,7 +117,7 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   public async updatedUserPassword(
     @Param('userId', ParseUUIDPipe) userId: string,
-    @Body() updPass: UpdatedUserPassDto
+    @Body() updPass: UpdatedUserPassDto,
   ): Promise<IApiResponse<IResponseUser>> {
     const statusCode = HttpStatus.OK;
     const updatedPass = await this.userService.updatedPassword(userId,updPass);

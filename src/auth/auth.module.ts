@@ -5,6 +5,7 @@ import { UserModule } from 'src/user/user.module';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { RoomModule } from 'src/room/room.module';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
   providers: [AuthService],
@@ -13,7 +14,8 @@ import { RoomModule } from 'src/room/room.module';
     forwardRef( () => UserModule),
     PrismaModule,
     JwtModule,
-    forwardRef( () => RoomModule)
+    forwardRef( () => RoomModule),
+    MailModule
   ],
   exports: [
     AuthService

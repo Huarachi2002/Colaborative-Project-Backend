@@ -45,5 +45,20 @@ export class AuthController {
     }
   }
 
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.OK)
+  public async forgotPassword(
+    @Body() body: { email: string }
+  ): Promise<IApiResponse<any>> {
+    const statusCode = HttpStatus.OK;
+    await this.authService.forgotPassword(body.email);
+    return {
+      statusCode,
+      message: "Email enviado",
+      data: null
+    };
+  }
+
+
 
 }

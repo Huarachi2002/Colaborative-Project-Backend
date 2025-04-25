@@ -71,7 +71,6 @@ export class ImportController {
               }
           }
         } catch (error) {
-          console.error('Error processing sketch:', error);
           throw new BadRequestException('Error al procesar el boceto: ' + error.message);
         }
 

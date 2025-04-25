@@ -140,7 +140,6 @@ export class AiProcessingService {
             
             return { elements };
         } catch (error) {
-            console.error('Error calling OpenAI API:', error.response?.data || error.message);
             throw new Error('Error processing sketch with AI');
         }
     }

@@ -16,7 +16,6 @@ export class RoomRoleGuard implements CanActivate {
   ):  Promise<boolean>  {
     const req = context.switchToHttp().getRequest<Request>();
     const roomCode = req.params?.roomCode;
-    console.log(roomCode);
     if (!roomCode) {
       throw new ForbiddenException('Código de sala no proporcionado');
     }

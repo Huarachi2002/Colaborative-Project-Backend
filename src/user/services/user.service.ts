@@ -11,7 +11,7 @@ import { IOptionUser } from '../interface';
 @Injectable()
 export class UserService {
   constructor(
-    private readonly prismaService: PrismaService
+    private readonly prismaService: PrismaService,
   ){}
 
 
@@ -103,6 +103,7 @@ export class UserService {
     return findUser;
   }
 
+
   public async findUserEmail(email: string): Promise<User> {
     const findUser = await this.prismaService.user.findFirst({
       where:{
@@ -141,8 +142,6 @@ export class UserService {
   public async updatedPassword(id: string, updPass: UpdatedUserPassDto): Promise<User> {
     const findUser = await this.findIdUser(id);
 
-    console.log("findUser", findUser.password);
-    console.log("updPass", updPass.password);
     const validatePass = bcrypt.compareSync(updPass.password, findUser.password);
     
     if(!validatePass)
@@ -159,5 +158,17 @@ export class UserService {
 
     return updatedPass;
 
+  }
+
+  public async updatedPasswordForgot(id: string, password: string): Promise<User> {
+    const updatedPass = await this.prismaService.user.update({
+      where: {
+        id
+      },
+      data:{
+        password: this.hashPass(password)
+      }
+    });
+    return updatedPass;
   }
 }
