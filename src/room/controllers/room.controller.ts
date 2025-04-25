@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { IApiResponse } from 'src/common/interface';
 import { IResponseRoom, IResponseRoomId, IResponseRooms } from '../interfaces';
 import { Request } from 'express';
@@ -139,19 +139,17 @@ export class RoomController {
     }
   }
 
-  @Patch("code/:id")
+  @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  public async updateCodeRoom(
-    @Param("id", ParseIntPipe) id: number,
-    @Req() req: Request
+  public async deleteRoom(
+    @Param("id", ParseIntPipe) id: number
   ): Promise<IApiResponse<IResponseRoom>> {
     const statusCode = HttpStatus.OK;
-    const {UserId} = req;
-    const room = await this.roomService.updateCodeRoom(id,UserId);
+    const room = await this.roomService.deleteRoom(id);
 
     return {
       statusCode,
-      message: "Codigo de la sala actualizada",
+      message: "Sala eliminada",
       data: {
         room
       }

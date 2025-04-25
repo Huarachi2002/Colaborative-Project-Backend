@@ -136,6 +136,26 @@ export class RoomService {
     return findAllRoom;
   }
 
+  public async deleteRoom(id: number): Promise<Room> {
+    const findIdRoom = await this.findIdRoom(id);
+
+    if(!findIdRoom)
+      throw new NotFoundException("La sala no se encuentra")
+
+    const deleteUserRoom = await this.userRoomService.deleteUserRoom(findIdRoom.id);
+
+    if(!deleteUserRoom)
+      throw new NotFoundException("No se pudo eliminar la sala")
+
+    const deleteRoom = await this.prismaService.room.delete({
+      where: {
+        id: findIdRoom.id
+      }
+    })
+
+    return deleteRoom;
+  }
+
   public async removeUserToRoom(idRoom: number, email: string): Promise<any> {
     const user = await this.userService.findUserEmail(email);
     if(!user)
@@ -232,25 +252,5 @@ export class RoomService {
     return updateRoom;
   }
 
-  public async updateCodeRoom(id: number,  userId: string): Promise<Room> { 
-    const findUser = await this.userService.findIdUser(userId);
-
-    const findIdRoom = await this.findIdRoom(id);
-
-    const findUserRoom = await this.userRoomService.findUserRoom(
-      findUser.id,
-      findIdRoom.id
-    );
-
-    const updateCodeRoom = await this.prismaService.room.update({
-      where: {
-        id: findIdRoom.id
-      },
-      data: {
-        code: this.generateCodeRoom()
-      }
-    })
-    return updateCodeRoom;
-  }
 
 }

@@ -24,6 +24,13 @@ export class UserRoomController {
   ): Promise<IApiResponse<boolean>> {
     const statusCode = HttpStatus.OK;
     const room = await this.userRoomService.findRoomByIdRoom(idRoom);
+    if(!room) {
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: "No existe la sala",
+        data: null
+      };
+    }
     const validateJoin = await this.userRoomService.validateJoinRoom(room.id, idUser);
     return {
       statusCode,

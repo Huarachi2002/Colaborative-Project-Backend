@@ -127,6 +127,15 @@ export class UserRoomService {
       }
     }
   }
+  
+  public async deleteUserRoom(id: number){
+    const deleteUserRoom = await this.prismaService.user_Room.deleteMany({
+      where: {
+        room_id: Number(id)
+      }
+    });
+    return deleteUserRoom;
+  }
 
   public async validateJoinRoom(idRoom: number , idUser: string): Promise<boolean>{
     const validateJoin = await this.prismaService.user_Room.findFirst({
