@@ -3,7 +3,7 @@ import { IApiResponse } from 'src/common/interface';
 import { IResponseRoom, IResponseRoomId, IResponseRooms } from '../interfaces';
 import { Request } from 'express';
 import { QueryCommonDto } from 'src/common/dto';
-import { RoomService } from '../services';
+import { RoomService, LiveblocksService } from '../services';
 import { CreateRoomDto } from '../dto';
 import { AuthTokenGuard } from 'src/auth/guard';
 import { UpdateRoomDto } from '../dto/update-room.dto';
@@ -12,7 +12,8 @@ import { UpdateRoomDto } from '../dto/update-room.dto';
 @UseGuards(AuthTokenGuard)
 export class RoomController {
   constructor(
-    private readonly roomService: RoomService
+    private readonly roomService: RoomService,
+    private readonly liveBlocksService: LiveblocksService
   ){}
 
   @Get()
@@ -146,7 +147,20 @@ export class RoomController {
   ): Promise<IApiResponse<IResponseRoom>> {
     const statusCode = HttpStatus.OK;
     const room = await this.roomService.deleteRoom(id);
-
+    if(!room)
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: "No se encontro la sala",
+        data: null
+      }
+      const idRoom = `project-${room.idRoom}`;
+    const deleteLiveblocks = await this.liveBlocksService.deleteRoom(idRoom);
+    if(!deleteLiveblocks)
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: "No se pudo eliminar la sala",
+        data: null
+      }
     return {
       statusCode,
       message: "Sala eliminada",

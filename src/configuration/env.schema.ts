@@ -8,5 +8,6 @@ export const envSchema = Joi.object({
   PASSWORD_EMAIL: Joi.string().required(),
   HOST_EMAIL: Joi.string().required(),
   URL_FRONTEND: Joi.string().required(),
-  OPENAI_API_KEY: Joi.string().required()
+  OPENAI_API_KEY: Joi.string().required(),
+  LIVEBLOCKS_SECRET_KEY: Joi.string().required(),
 })
