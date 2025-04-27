@@ -116,18 +116,33 @@ Solo identifica formas básicas.`;
 export const promptIAComponentsAngular = (imageBase64: string, options: string) => {
     return `Analiza esta imagen de un diagrama o mockup visual y genera un proyecto Angular completo basado en lo que ves.
     Proporciona el código para los componentes TypeScript (.ts), plantillas HTML (.html) y estilos SCSS (.scss).
-    Pautas:
+    
+    INSTRUCCIONES DETALLADAS:
 
-    1. Interpreta la imagen e identifica todos los componentes visuales (formularios, tablas, botones, etc).
-    2. Genera todos los componentes Angular necesarios con su código completo y funcional.
-    3. Crea una estructura de proyecto organizada y modular.
-    4. Implementa estilos CSS/SCSS detallados para que coincidan exactamente con la imagen.
-    5. Identifica las operaciones CRUD y genera servicios para consumir API REST.
-    6. Crea interfaces y modelos para los datos.
-    7. Implementa formularios reactivos para entradas de datos.
-    8. Incluye validaciones de formularios y manejo de errores.
-    9. Sigue las mejores prácticas de Angular.
-    10. Genera un sistema de navegación entre vistas si se detectan múltiples pantallas.
+    1. ANÁLISIS DE LA IMAGEN:
+       - Interpreta la imagen e identifica todos los componentes visuales (formularios, tablas, botones, menús, etc).
+       - Reconoce la estructura y jerarquía de la interfaz (header, sidebar, main content, footer).
+       - Identifica flujos de navegación o acciones del usuario implícitas.
+
+    2. GENERACIÓN DE COMPONENTES:
+       - Crea componentes Angular reutilizables para cada elemento significativo de la interfaz.
+       - Desarrolla formularios con validaciones apropiadas si se identifican campos de entrada.
+       - Genera tablas con ordenación y filtrado si hay estructuras tabulares.
+
+    3. ESTRUCTURA DE LA APLICACIÓN:
+       - Implementa un sistema de navegación coherente a través de rutas.
+       - Organiza los componentes de manera lógica y modular.
+       - Crea servicios para gestionar operaciones CRUD y estado de la aplicación.
+
+    4. INTEGRACIÓN Y VISUALIZACIÓN:
+       - Modifica app.component.* para integrar correctamente todos los componentes generados.
+       - Asegura que la navegación funcione correctamente en app.component.html.
+       - Establece un diseño responsive y visualmente atractivo.
+
+    ESPECIALMENTE IMPORTANTE:
+    - Genera un app.component.html que integre correctamente todos los componentes, ya sea usando router-outlet o colocándolos directamente.
+    - Define claramente cómo los componentes se relacionan entre sí y cómo deben visualizarse en la aplicación.
+    - Si identificas múltiples "páginas" o vistas, configura rutas adecuadas y asegúrate de que el app.component.html incluya la navegación necesaria.
 
     Opciones de proyecto: ${options}
 
@@ -135,7 +150,12 @@ export const promptIAComponentsAngular = (imageBase64: string, options: string) 
 
     {
       "projectStructure": {
-        "description": "Descripción de la estructura del proyecto y sus principales componentes"
+        "description": "Descripción detallada de la estructura del proyecto y cómo se relacionan los componentes"
+      },
+      "appComponent": {
+        "html": "Código completo para app.component.html que integra los componentes generados",
+        "ts": "Código para app.component.ts",
+        "scss": "Estilos para app.component.scss"
       },
       "components": {
         "componentName1": {
@@ -161,7 +181,7 @@ export const promptIAComponentsAngular = (imageBase64: string, options: string) 
         "moduleName1": "contenido del módulo",
         "moduleName2": "..."
       },
-      "routing": "configuración de rutas del proyecto"
+      "routing": "configuración detallada de rutas del proyecto"
     }
 
     Asegúrate de que el JSON sea válido y que cada componente tenga todo el código necesario para funcionar correctamente.
