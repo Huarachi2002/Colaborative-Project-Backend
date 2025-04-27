@@ -6,7 +6,6 @@ import { AiProcessingService } from "./services/ai-processing.service";
 import { AuthModule } from "../auth/auth.module";
 import { UserModule } from "../user/user.module";
 
-
 @Module({
     imports: [
         ConfigModule,
