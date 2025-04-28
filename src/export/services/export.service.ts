@@ -146,10 +146,12 @@ export class ExportService {
                 imageBase64 = imageBase64.split('base64,')[1];
             }
 
-            // Mejorar el prompt para incluir instrucciones sobre la integración de componentes
+            // Mejorar el prompt para incluir instrucciones de compatibilidad y evitar errores comunes
             const enhancedOptions = {
                 ...options,
-                needsAppIntegration: true // Indicar que necesitamos integrar los componentes en app.component
+                needsAppIntegration: true,
+                angular19: true,
+                preventCommonErrors: true
             };
 
             const componentCode = await this.aiProcessingService.generateAngularComponents({
@@ -157,21 +159,535 @@ export class ExportService {
                 options: JSON.stringify(enhancedOptions),
             });
 
-            return componentCode;
+            // Post-procesar el código generado para corregir errores comunes
+            return this.validateAndFixGeneratedComponents(componentCode);
         } catch (error) {
             this.logger.error('Error generando componentes con la imagen:', error);
             throw new Error('Error al generar componentes desde la imagen: ' + error.message);
         }
+    }
+
+    private validateAndFixGeneratedComponents(generatedComponents: any): any {
+        this.logger.log('Validando y corrigiendo componentes generados...');
+        
+        try {
+            const fixedComponents = { ...generatedComponents };
+            
+            // Corregir componentes
+            if (fixedComponents.components) {
+                for (const componentName in fixedComponents.components) {
+                    const component = fixedComponents.components[componentName];
+                    
+                    // Corregir archivo TS
+                    if (component.ts) {
+                        component.ts = this.fixComponentTsFile(componentName, component.ts);
+                    }
+                    
+                    // Corregir archivo HTML
+                    if (component.html) {
+                        component.html = this.fixComponentHtmlFile(component.html);
+                    }
+                }
+            }
+            
+            // Corregir servicios
+            if (fixedComponents.services) {
+                for (const serviceName in fixedComponents.services) {
+                    fixedComponents.services[serviceName] = this.fixServiceFile(
+                        serviceName, fixedComponents.services[serviceName]
+                    );
+                }
+            }
+            
+            // Asegurarse de que existe la configuración de rutas
+            if (!fixedComponents.routing && fixedComponents.components) {
+                fixedComponents.routing = this.generateRoutingFile(fixedComponents.components);
+            } else if (fixedComponents.routing) {
+                fixedComponents.routing = this.fixRoutingFile(fixedComponents.routing, fixedComponents.components);
+            }
+            
+            // Asegurar que exista el componente app
+            if (!fixedComponents.appComponent) {
+                fixedComponents.appComponent = this.generateAppComponent(fixedComponents.components);
+            } else {
+                // Corregir el app component existente
+                if (fixedComponents.appComponent.ts) {
+                    fixedComponents.appComponent.ts = this.fixAppComponentTsFile(fixedComponents.appComponent.ts, fixedComponents.components);
+                }
+                if (fixedComponents.appComponent.html) {
+                    fixedComponents.appComponent.html = this.fixAppComponentHtmlFile(fixedComponents.appComponent.html, fixedComponents.components);
+                }
+            }
+            
+            return fixedComponents;
+        } catch (error) {
+            this.logger.error('Error validando componentes generados:', error);
+            return generatedComponents; // Devolver los componentes originales si hay un error
+        }
+    }
+
+    /**
+     * Corrige errores comunes en el archivo TypeScript de un componente
+     */
+    private fixComponentTsFile(componentName: string, tsContent: string): string {
+        // 1. Asegurar que sea un componente standalone
+        if (!tsContent.includes('standalone: true')) {
+            tsContent = tsContent.replace(
+                /@Component\(\{/,
+                '@Component({\n  standalone: true,'
+            );
+        }
+        
+        // 2. Asegurar que tenga imports correctos (CommonModule para *ngFor, *ngIf, etc.)
+        if (tsContent.includes('*ngFor') || tsContent.includes('*ngIf') || 
+            tsContent.includes('[(ngModel)]') || tsContent.includes('[ngClass]')) {
+            
+            if (!tsContent.includes('imports: [')) {
+                tsContent = tsContent.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [CommonModule],'
+                );
+            } else if (!tsContent.includes('CommonModule')) {
+                tsContent = tsContent.replace(
+                    /imports: \[/,
+                    'imports: [CommonModule, '
+                );
+            }
+            
+            // Añadir importación de CommonModule si no existe
+            if (!tsContent.includes('import { CommonModule }')) {
+                tsContent = tsContent.replace(
+                    /import { Component/,
+                    'import { Component, NgModule } from \'@angular/core\';\nimport { CommonModule } from \'@angular/common\';'
+                );
+            }
+        }
+        
+        // 3. Si el componente usa formularios, añadir ReactiveFormsModule
+        if (tsContent.includes('FormGroup') || tsContent.includes('formGroup') || 
+            tsContent.includes('FormBuilder') || tsContent.includes('FormControl')) {
+            
+            // Añadir ReactiveFormsModule a imports
+            if (!tsContent.includes('imports: [')) {
+                tsContent = tsContent.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [CommonModule, ReactiveFormsModule],'
+                );
+            } else if (!tsContent.includes('ReactiveFormsModule')) {
+                tsContent = tsContent.replace(
+                    /imports: \[(.*?)\]/,
+                    (match, p1) => `imports: [${p1}${p1.trim() ? ', ' : ''}ReactiveFormsModule]`
+                );
+            }
+            
+            // Añadir importación de ReactiveFormsModule si no existe
+            if (!tsContent.includes('import { ReactiveFormsModule }')) {
+                tsContent = tsContent.replace(
+                    /import { Component/,
+                    'import { Component } from \'@angular/core\';\nimport { ReactiveFormsModule, FormGroup, FormBuilder } from \'@angular/forms\';\nimport { CommonModule } from \'@angular/common\';'
+                );
+            }
+        }
+        
+        // 4. Si hay propiedades @Input sin inicializar, inicializarlas
+        tsContent = tsContent.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*string;/g,
+            '@Input() $1: string = \'\';'
+        );
+        
+        tsContent = tsContent.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*number;/g,
+            '@Input() $1: number = 0;'
+        );
+        
+        tsContent = tsContent.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*boolean;/g,
+            '@Input() $1: boolean = false;'
+        );
+        
+        tsContent = tsContent.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*any;/g,
+            '@Input() $1: any = null;'
+        );
+        
+        // 5. Asegurarnos de que el selector sea correcto y consistente
+        if (!tsContent.includes(`selector: 'app-${componentName}'`)) {
+            tsContent = tsContent.replace(
+                /selector: ['"].*?['"],/,
+                `selector: 'app-${componentName}',`
+            );
+            
+            // Si no hay un selector, añadirlo
+            if (!tsContent.includes('selector:')) {
+                tsContent = tsContent.replace(
+                    /@Component\(\{/,
+                    `@Component({\n  selector: 'app-${componentName}',`
+                );
+            }
+        }
+        
+        // 6. Asegurar que la clase tenga implementación de OnInit si la usa
+        if (tsContent.includes('ngOnInit') && !tsContent.includes('implements OnInit')) {
+            tsContent = tsContent.replace(
+                /export class (\w+Component)/,
+                'export class $1 implements OnInit'
+            );
+            
+            // Añadir importación de OnInit si no existe
+            if (!tsContent.includes('import { OnInit }')) {
+                tsContent = tsContent.replace(
+                    /import { Component/,
+                    'import { Component, OnInit'
+                );
+            }
+        }
+        
+        return tsContent;
+    }
+
+    /**
+     * Corrige errores comunes en archivos HTML de componentes
+     */
+    private fixComponentHtmlFile(htmlContent: string): string {
+        // Corregir uso de ngModel sin importación
+        if (htmlContent.includes('[(ngModel)]') && !htmlContent.includes('formControlName')) {
+            // Esto requeriría cambiar también el TS para importar FormsModule
+            // (se maneja en fixComponentTsFile)
+        }
+        
+        // Corregir uso de formGroup sin ReactiveFormsModule
+        if (htmlContent.includes('[formGroup]') || htmlContent.includes('formControlName')) {
+            // Esto requeriría cambiar también el TS para importar ReactiveFormsModule
+            // (se maneja en fixComponentTsFile)
+        }
+        
+        return htmlContent;
+    }
+
+    /**
+     * Corrige errores comunes en servicios
+     */
+    private fixServiceFile(serviceName: string, serviceContent: string): string {
+        // 1. Asegurar que el servicio tenga decorador Injectable y providedIn: 'root'
+        if (!serviceContent.includes('@Injectable')) {
+            serviceContent = `import { Injectable } from '@angular/core';\n\n@Injectable({\n  providedIn: 'root'\n})\n${serviceContent}`;
+        } else if (!serviceContent.includes('providedIn')) {
+            serviceContent = serviceContent.replace(
+                /@Injectable\(\)/,
+                `@Injectable({\n  providedIn: 'root'\n})`
+            );
+        }
+        
+        return serviceContent;
+    }
+
+    /**
+     * Genera un archivo de configuración de rutas básico
+     */
+    private generateRoutingFile(components: any): string {
+        let routingContent = `import { Routes } from '@angular/router';\n`;
+        
+        // Importar componentes
+        for (const componentName in components) {
+            const className = this.getComponentClassName(componentName);
+            routingContent += `import { ${className} } from './components/${componentName}/${componentName}.component';\n`;
+        }
+        
+        routingContent += `\nexport const routes: Routes = [\n`;
+        
+        // Crear rutas para cada componente
+        const componentEntries = Object.entries(components);
+        componentEntries.forEach(([componentName, component], index) => {
+            const className = this.getComponentClassName(componentName);
+            const path = componentName.replace(/^app-/, '');
+            routingContent += `  { path: '${path}', component: ${className} }${index < componentEntries.length - 1 ? ',' : ''}\n`;
+        });
+        
+        // Añadir ruta por defecto si hay al menos un componente
+        if (componentEntries.length > 0) {
+            const [firstComponentName] = componentEntries[0];
+            const defaultPath = firstComponentName.replace(/^app-/, '');
+            routingContent += `,\n  { path: '', redirectTo: '${defaultPath}', pathMatch: 'full' }\n`;
+        }
+        
+        routingContent += `];\n`;
+        
+        return routingContent;
+    }
+
+    /**
+     * Corrige errores comunes en el archivo de rutas
+     */
+    private fixRoutingFile(routingContent: string, components: any): string {
+        // 1. Asegurar que tenga la importación de Routes
+        if (!routingContent.includes('import { Routes }')) {
+            routingContent = `import { Routes } from '@angular/router';\n${routingContent}`;
+        }
+        
+        // 2. Asegurar que exporte las rutas
+        if (!routingContent.includes('export const routes')) {
+            routingContent = routingContent.replace(
+                /const routes/,
+                'export const routes'
+            );
+        }
+        
+        // 3. Verificar importaciones de componentes
+        for (const componentName in components) {
+            const className = this.getComponentClassName(componentName);
+            if (routingContent.includes(className) && !routingContent.includes(`import { ${className} }`)) {
+                routingContent = `import { ${className} } from './components/${componentName}/${componentName}.component';\n${routingContent}`;
+            }
+        }
+        
+        return routingContent;
+    }
+
+    /**
+     * Corrige errores comunes en el archivo app.component.ts
+     */
+    private fixAppComponentTsFile(tsContent: string, components: any): string {
+        // 1. Asegurar que sea un componente standalone
+        if (!tsContent.includes('standalone: true')) {
+            tsContent = tsContent.replace(
+                /@Component\(\{/,
+                '@Component({\n  standalone: true,'
+            );
+        }
+        
+        // 2. Asegurar que tenga imports correctos para los componentes usados
+        const componentImports = [];
+        const usedComponents = [];
+        
+        // Analizar qué componentes se usan en el HTML
+        for (const componentName in components) {
+            // Verificar si el HTML del app component usa el selector de este componente
+            if (tsContent.includes(`app-${componentName}`)) {
+                usedComponents.push(componentName);
+            }
+        }
+        
+        // Agregar imports para los componentes usados
+        for (const componentName of usedComponents) {
+            const className = this.getComponentClassName(componentName);
+            
+            // Añadir importación del componente si no existe
+            if (!tsContent.includes(`import { ${className} }`)) {
+                componentImports.push(`import { ${className} } from './components/${componentName}/${componentName}.component';`);
+            }
+            
+            // Asegurar que el componente está en el array imports
+            if (!tsContent.includes(`imports: [`) && componentImports.length > 0) {
+                tsContent = tsContent.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [RouterOutlet, CommonModule],'
+                );
+            }
+        }
+        
+        // 3. Añadir imports si no están presentes
+        if (componentImports.length > 0) {
+            tsContent = `${componentImports.join('\n')}\n${tsContent}`;
+            
+            // Añadir componentes al array imports
+            for (const componentName of usedComponents) {
+                const className = this.getComponentClassName(componentName);
+                if (!tsContent.includes(className) && tsContent.includes('imports: [')) {
+                    tsContent = tsContent.replace(
+                        /imports: \[(.*?)\]/,
+                        (match, p1) => `imports: [${p1}${p1.trim() ? ', ' : ''}${className}]`
+                    );
+                }
+            }
+        }
+        
+        // 4. Asegurar que RouterOutlet y CommonModule están importados
+        if (!tsContent.includes('import { RouterOutlet }')) {
+            tsContent = `import { RouterOutlet } from '@angular/router';\n${tsContent}`;
+        }
+        
+        if (!tsContent.includes('import { CommonModule }')) {
+            tsContent = `import { CommonModule } from '@angular/common';\n${tsContent}`;
+        }
+        
+        if (tsContent.includes('imports: [') && !tsContent.includes('RouterOutlet')) {
+            tsContent = tsContent.replace(
+                /imports: \[/,
+                'imports: [RouterOutlet, '
+            );
+        }
+        
+        return tsContent;
+    }
+
+    /**
+     * Corrige errores comunes en el archivo app.component.html
+     */
+    private fixAppComponentHtmlFile(htmlContent: string, components: any): string {
+        // Verificar si el componente tiene router-outlet
+        const hasRouterOutlet = htmlContent.includes('<router-outlet></router-outlet>') || 
+                                htmlContent.includes('<router-outlet/>');
+        
+        // Si no hay router-outlet pero hay componentes, agregar el router-outlet
+        if (!hasRouterOutlet && Object.keys(components).length > 0) {
+            // Si hay una sección main o div principal, añadir router-outlet ahí
+            if (htmlContent.includes('<main>') || htmlContent.includes('<div class="main">')) {
+                htmlContent = htmlContent.replace(
+                    /(<main.*?>|<div class="main".*?>)/,
+                    '$1\n  <router-outlet></router-outlet>'
+                );
+            } else {
+                // Si no, añadir un div con router-outlet al final
+                htmlContent += '\n<div class="content">\n  <router-outlet></router-outlet>\n</div>\n';
+            }
+        }
+        
+        return htmlContent;
+    }
+
+    /**
+     * Genera un componente app básico y funcional
+     */
+    private generateAppComponent(components: any): any {
+        const componentNames = Object.keys(components);
+        
+        // HTML para app.component.html
+        let html = `<div class="app-container">
+  <header class="app-header">
+    <h1>Aplicación Angular</h1>
+    <nav class="app-nav">
+      <ul>`;
+        
+        // Añadir enlaces de navegación para cada componente
+        for (const componentName of componentNames) {
+            const routePath = componentName.replace(/^app-/, '');
+            const displayName = componentName
+                .replace(/^app-/, '')
+                .split('-')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+            
+            html += `
+        <li><a routerLink="/${routePath}" routerLinkActive="active">${displayName}</a></li>`;
+        }
+        
+        html += `
+      </ul>
+    </nav>
+  </header>
+
+  <main class="app-content">
+    <router-outlet></router-outlet>
+  </main>
+
+  <footer class="app-footer">
+    <p>&copy; ${new Date().getFullYear()} - Aplicación Angular</p>
+  </footer>
+</div>`;
+        
+        // TypeScript para app.component.ts
+        let ts = `import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { CommonModule } from '@angular/common';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterOutlet, CommonModule],
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+export class AppComponent {
+  title = 'Aplicación Angular';
+}`;
+        
+        // CSS/SCSS para app.component.scss
+        let scss = `.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background-color: #3f51b5;
+  color: white;
+  padding: 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.app-nav ul {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+}
+
+.app-nav li {
+  margin-right: 1rem;
+}
+
+.app-nav a {
+  color: white;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.app-nav a:hover, .app-nav a.active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.app-footer {
+  background-color: #f5f5f5;
+  color: #555;
+  text-align: center;
+  padding: 1rem;
+  margin-top: 2rem;
+}`;
+        
+        return {
+            html,
+            ts,
+            scss
+        };
     }
     
     private async addGeneratedComponentsToProject(projectDir: string, generatedComponents: any, options: any): Promise<void> {
         try {
             this.logger.log('Añadiendo componentes generados al proyecto...');
             
-            // Actualizar app.module.ts para incluir componentes generados
-            await this.updateAppModule(projectDir, generatedComponents);
+            // Determinar si estamos usando Angular con componentes standalone
+            const isStandaloneComponent = this.isUsingStandaloneComponents(projectDir);
+            const isAngular19Plus = this.determineAngularVersion() >= 19;
             
-            // Agregar componentes
+            // Organizar componentes por funcionalidad/módulo si es apropiado
+            const componentsByFeature = this.organizeComponentsByFeature(generatedComponents.components || {});
+            
+            // Crear feature modules si no es un proyecto standalone y hay suficientes componentes
+            if (!isStandaloneComponent && !isAngular19Plus && Object.keys(componentsByFeature).length > 1) {
+                await this.createFeatureModules(projectDir, componentsByFeature, options);
+            }
+            
+            // Actualizar app.module.ts para incluir componentes y módulos generados
+            if (!isStandaloneComponent && !isAngular19Plus) {
+                await this.updateAppModule(projectDir, generatedComponents, componentsByFeature);
+            }
+            
+            // Agregar componentes asegurando la estructura de carpetas correcta
             if (generatedComponents.components) {
                 await this.addComponentsToProject(projectDir, generatedComponents.components);
             }
@@ -188,8 +704,19 @@ export class ExportService {
             
             // Actualizar rutas si es necesario
             if (options.includeRouting) {
-                await this.updateRoutingModule(projectDir, generatedComponents);
+                // Para Angular 19+/standalone components, asegurar configuración de rutas correcta
+                if (isStandaloneComponent || isAngular19Plus) {
+                    await this.updateRoutingModule(projectDir, generatedComponents);
+                    // Asegurar que app.config.ts tenga la configuración correcta para las rutas
+                    await this.updateAppConfig(projectDir, options);
+                } else {
+                    // Para Angular tradicional con módulos
+                    await this.updateRoutingModule(projectDir, generatedComponents);
+                }
             }
+            
+            // Verificar y corregir los selectores de componentes
+            await this.verifyComponentSelectors(projectDir, generatedComponents.components || {});
             
             this.logger.log('Componentes generados añadidos correctamente');
         } catch (error) {
@@ -198,7 +725,180 @@ export class ExportService {
         }
     }
     
-    private async updateAppModule(projectDir: string, generatedComponents: any): Promise<void> {
+    /**
+     * Organiza componentes en grupos por posible funcionalidad (basado en nombres)
+     */
+    private organizeComponentsByFeature(components: any): { [feature: string]: string[] } {
+        const featureMap: { [feature: string]: string[] } = { 'core': [] };
+        
+        for (const componentName in components) {
+            // Identificar posibles features basados en prefijos comunes
+            // Ejemplo: user-profile, user-settings -> feature "user"
+            const nameParts = componentName.split('-');
+            if (nameParts.length > 1) {
+                const possibleFeature = nameParts[0];
+                
+                // Si no existe la feature, crearla
+                if (!featureMap[possibleFeature]) {
+                    featureMap[possibleFeature] = [];
+                }
+                
+                featureMap[possibleFeature].push(componentName);
+            } else {
+                // Si no tiene un prefijo claro, va a "core"
+                featureMap['core'].push(componentName);
+            }
+        }
+        
+        // Eliminar features que solo tienen un componente para no sobre-modularizar
+        const result: { [feature: string]: string[] } = {};
+        for (const feature in featureMap) {
+            if (featureMap[feature].length >= 2 || feature === 'core') {
+                result[feature] = featureMap[feature];
+            } else {
+                // Si solo hay un componente, moverlo a "core"
+                if (!result['core']) {
+                    result['core'] = [];
+                }
+                result['core'] = result['core'].concat(featureMap[feature]);
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Crea módulos de características (feature modules) para organizar mejor la aplicación
+     */
+    private async createFeatureModules(projectDir: string, componentsByFeature: { [feature: string]: string[] }, options: any): Promise<void> {
+        const featuresDir = path.join(projectDir, 'src', 'app', 'features');
+        
+        // Crear directorio de features si no existe
+        if (!fs.existsSync(featuresDir)) {
+            fs.mkdirSync(featuresDir, { recursive: true });
+        }
+        
+        for (const feature in componentsByFeature) {
+            if (feature === 'core') continue; // No creamos un módulo específico para componentes core
+            
+            const components = componentsByFeature[feature];
+            if (components.length === 0) continue;
+            
+            // Crear directorio para el feature
+            const featureDir = path.join(featuresDir, feature);
+            if (!fs.existsSync(featureDir)) {
+                fs.mkdirSync(featureDir, { recursive: true });
+            }
+            
+            // Crear el módulo para el feature
+            const featureModuleContent = this.generateFeatureModule(feature, components, options.includeRouting);
+            fs.writeFileSync(path.join(featureDir, `${feature}.module.ts`), featureModuleContent);
+            
+            // Si se incluye enrutamiento, crear un módulo de rutas para el feature
+            if (options.includeRouting) {
+                const featureRoutingModuleContent = this.generateFeatureRoutingModule(feature, components);
+                fs.writeFileSync(path.join(featureDir, `${feature}-routing.module.ts`), featureRoutingModuleContent);
+            }
+        }
+    }
+    
+    /**
+     * Genera el contenido de un módulo de características (feature module)
+     */
+    private generateFeatureModule(feature: string, components: string[], includeRouting: boolean): string {
+        const featureModuleName = feature.charAt(0).toUpperCase() + feature.slice(1) + 'Module';
+        
+        let imports = `import { NgModule } from '@angular/core';\nimport { CommonModule } from '@angular/common';\n`;
+        
+        // Importar módulo de rutas si es necesario
+        if (includeRouting) {
+            imports += `import { ${feature.charAt(0).toUpperCase() + feature.slice(1)}RoutingModule } from './${feature}-routing.module';\n`;
+        }
+        
+        // Importar componentes
+        for (const component of components) {
+            const className = this.getComponentClassName(component);
+            // Asumimos que los componentes se moverán a la carpeta del feature
+            imports += `import { ${className} } from '../../components/${component}/${component}.component';\n`;
+        }
+        
+        let moduleContent = `${imports}\n@NgModule({\n`;
+        moduleContent += `  declarations: [\n    ${components.map(c => this.getComponentClassName(c)).join(',\n    ')}\n  ],\n`;
+        
+        moduleContent += `  imports: [\n    CommonModule,\n`;
+        if (includeRouting) {
+            moduleContent += `    ${feature.charAt(0).toUpperCase() + feature.slice(1)}RoutingModule,\n`;
+        }
+        moduleContent += `  ],\n`;
+        
+        // Exportar componentes para que estén disponibles fuera del módulo
+        moduleContent += `  exports: [\n    ${components.map(c => this.getComponentClassName(c)).join(',\n    ')}\n  ]\n`;
+        moduleContent += `})\nexport class ${featureModuleName} {}\n`;
+        
+        return moduleContent;
+    }
+
+    private getComponentClassName(componentName: string): string {
+        // Convertir kebab-case a PascalCase y agregar 'Component' al final
+        return componentName
+            .split('-')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('') + 'Component';
+    }
+
+    private getServiceClassName(serviceName: string): string {
+        // Convertir kebab-case a PascalCase y agregar 'Service' al final
+        return serviceName
+            .split('-')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('') + 'Service';
+    }
+    
+    /**
+     * Genera el contenido de un módulo de rutas para un feature
+     */
+    private generateFeatureRoutingModule(feature: string, components: string[]): string {
+        const routingModuleName = feature.charAt(0).toUpperCase() + feature.slice(1) + 'RoutingModule';
+        
+        let imports = `import { NgModule } from '@angular/core';\n`;
+        imports += `import { RouterModule, Routes } from '@angular/router';\n`;
+        
+        // Importar componentes
+        for (const component of components) {
+            const className = this.getComponentClassName(component);
+            imports += `import { ${className} } from '../../components/${component}/${component}.component';\n`;
+        }
+        
+        let routes = `const routes: Routes = [\n`;
+        
+        // Crear una ruta para cada componente
+        components.forEach((component, index) => {
+            const className = this.getComponentClassName(component);
+            const path = component.replace(/^app-/, ''); // Eliminar prefijo app- si existe
+            routes += `  { path: '${path}', component: ${className} }${index < components.length - 1 ? ',' : ''}\n`;
+        });
+        
+        // Si hay al menos un componente, agregar una ruta por defecto
+        if (components.length > 0) {
+            const firstComponent = components[0];
+            const path = firstComponent.replace(/^app-/, '');
+            routes += `  { path: '', redirectTo: '${path}', pathMatch: 'full' }\n`;
+        }
+        
+        routes += `];\n\n`;
+        
+        let moduleContent = `${imports}\n${routes}@NgModule({\n`;
+        moduleContent += `  imports: [RouterModule.forChild(routes)],\n`;
+        moduleContent += `  exports: [RouterModule]\n`;
+        moduleContent += `})\nexport class ${routingModuleName} {}\n`;
+        
+        return moduleContent;
+    }
+    
+    /**
+     * Actualiza el módulo principal para incluir los feature modules
+     */
+    private async updateAppModule(projectDir: string, generatedComponents: any, componentsByFeature: { [feature: string]: string[] }): Promise<void> {
         const appModulePath = path.join(projectDir, 'src', 'app', 'app.module.ts');
         
         if (!fs.existsSync(appModulePath)) {
@@ -208,31 +908,59 @@ export class ExportService {
         
         let appModule = fs.readFileSync(appModulePath, 'utf8');
         
-        // Recopilar componentes para importar
-        const componentImports = [];
-        const componentDeclarations = [];
+        // Recopilar módulos de features a importar
+        const featureModuleImports = [];
+        const featureModuleDeclarations = [];
         
-        if (generatedComponents.components) {
-            for (const componentName in generatedComponents.components) {
+        for (const feature in componentsByFeature) {
+            if (feature === 'core' || componentsByFeature[feature].length === 0) continue;
+            
+            const moduleName = feature.charAt(0).toUpperCase() + feature.slice(1) + 'Module';
+            featureModuleImports.push(`import { ${moduleName} } from './features/${feature}/${feature}.module';`);
+            featureModuleDeclarations.push(moduleName);
+        }
+        
+        // Recopilar componentes core para importar directamente
+        const coreComponentImports = [];
+        const coreComponentDeclarations = [];
+        
+        if (componentsByFeature['core'] && componentsByFeature['core'].length > 0) {
+            for (const componentName of componentsByFeature['core']) {
                 const className = this.getComponentClassName(componentName);
-                componentImports.push(`import { ${className} } from './components/${componentName}/${componentName}.component';`);
-                componentDeclarations.push(className);
+                coreComponentImports.push(`import { ${className} } from './components/${componentName}/${componentName}.component';`);
+                coreComponentDeclarations.push(className);
             }
         }
         
         // Agregar importaciones al principio del archivo
-        if (componentImports.length > 0) {
+        let importStatements = '';
+        if (featureModuleImports.length > 0) {
+            importStatements += featureModuleImports.join('\n') + '\n';
+        }
+        if (coreComponentImports.length > 0) {
+            importStatements += coreComponentImports.join('\n') + '\n';
+        }
+        
+        if (importStatements) {
             appModule = appModule.replace(
                 'import { NgModule } from \'@angular/core\';',
-                'import { NgModule } from \'@angular/core\';\n' + componentImports.join('\n')
+                'import { NgModule } from \'@angular/core\';\n' + importStatements
             );
         }
         
-        // Agregar declaraciones al array declarations
-        if (componentDeclarations.length > 0) {
+        // Agregar módulos de features al array imports
+        if (featureModuleDeclarations.length > 0) {
+            appModule = appModule.replace(
+                /imports: \[([\s\S]*?)\]/,
+                `imports: [$1,\n    ${featureModuleDeclarations.join(',\n    ')}\n  ]`
+            );
+        }
+        
+        // Agregar componentes core al array declarations
+        if (coreComponentDeclarations.length > 0) {
             appModule = appModule.replace(
                 /declarations: \[([\s\S]*?)\]/,
-                `declarations: [$1${componentDeclarations.length > 0 ? ',\n    ' + componentDeclarations.join(',\n    ') : ''}]`
+                `declarations: [$1${coreComponentDeclarations.length > 0 ? ',\n    ' + coreComponentDeclarations.join(',\n    ') : ''}\n  ]`
             );
         }
         
@@ -257,7 +985,7 @@ export class ExportService {
             if (serviceProviders.length > 0) {
                 appModule = appModule.replace(
                     /providers: \[([\s\S]*?)\]/,
-                    `providers: [$1${serviceProviders.length > 0 ? ',\n    ' + serviceProviders.join(',\n    ') : ''}]`
+                    `providers: [$1${serviceProviders.length > 0 ? ',\n    ' + serviceProviders.join(',\n    ') : ''}\n  ]`
                 );
             }
         }
@@ -265,22 +993,80 @@ export class ExportService {
         fs.writeFileSync(appModulePath, appModule);
     }
     
-    private getComponentClassName(componentName: string): string {
-        // Convertir kebab-case a PascalCase y agregar 'Component' al final
-        return componentName
-            .split('-')
-            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-            .join('') + 'Component';
+    /**
+     * Verifica y corrige los selectores de los componentes
+     */
+    private async verifyComponentSelectors(projectDir: string, components: any): Promise<void> {
+        for (const componentName in components) {
+            const component = components[componentName];
+            const componentDir = path.join(projectDir, 'src', 'app', 'components', componentName);
+            const componentTsPath = path.join(componentDir, `${componentName}.component.ts`);
+            
+            if (!fs.existsSync(componentTsPath) || !component.ts) {
+                continue;
+            }
+            
+            let componentTs = component.ts;
+            
+            // Verificar que el selector contenga el nombre del componente
+            if (!componentTs.includes(`selector: '${componentName}'`) && !componentTs.includes(`selector: "app-${componentName}"`)) {
+                // Corregir el selector para que use una convención estándar
+                componentTs = componentTs.replace(
+                    /selector: ['"].*?['"],/,
+                    `selector: 'app-${componentName}',`
+                );
+                
+                // Si no hay un selector, añadirlo
+                if (!componentTs.includes('selector:')) {
+                    componentTs = componentTs.replace(
+                        /@Component\(\{/,
+                        `@Component({\n  selector: 'app-${componentName}',`
+                    );
+                }
+                
+                // Escribir los cambios
+                fs.writeFileSync(componentTsPath, componentTs);
+            }
+        }
     }
     
-    private getServiceClassName(serviceName: string): string {
-        // Convertir kebab-case a PascalCase y agregar 'Service' al final
-        return serviceName
-            .split('-')
-            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-            .join('') + 'Service';
+    /**
+     * Actualiza la configuración de la aplicación para rutas (Angular 19+)
+     */
+    private async updateAppConfig(projectDir: string, options: any): Promise<void> {
+        const appConfigPath = path.join(projectDir, 'src', 'app', 'app.config.ts');
+        
+        if (!fs.existsSync(appConfigPath)) {
+            this.logger.warn('No se encontró app.config.ts');
+            return;
+        }
+        
+        let appConfig = fs.readFileSync(appConfigPath, 'utf8');
+        
+        // Asegurar que provideRouter esté correctamente importado y configurado
+        if (!appConfig.includes('provideRouter(routes)')) {
+            // Si no incluye la configuración de rutas, añadirla
+            const routesImport = "import { routes } from './app.routes';";
+            if (!appConfig.includes(routesImport)) {
+                appConfig = appConfig.replace(
+                    /import {.*?} from '@angular\/core';/,
+                    `$&\nimport { provideRouter } from '@angular/router';\n${routesImport}`
+                );
+            }
+            
+            // Añadir provideRouter a los providers
+            appConfig = appConfig.replace(
+                /providers: \[([\s\S]*?)\]/,
+                `providers: [$1, provideRouter(routes)]`
+            );
+        }
+        
+        fs.writeFileSync(appConfigPath, appConfig);
     }
     
+    /**
+     * Mejora la estructura de carpetas para los componentes generados
+     */
     private async addComponentsToProject(projectDir: string, components: any): Promise<void> {
         const componentsDir = path.join(projectDir, 'src', 'app', 'components');
         const isAngular19Plus = this.determineAngularVersion() >= 19;
@@ -300,6 +1086,21 @@ export class ExportService {
             // Para Angular 19+, asegurarse de que los componentes sean standalone
             if (component.ts && isAngular19Plus) {
                 let componentTs = component.ts;
+                
+                // Asegurar que el selector sea consistente con el nombre del componente
+                if (!componentTs.includes(`selector: '${componentName}'`) && !componentTs.includes(`selector: "app-${componentName}"`)) {
+                    componentTs = componentTs.replace(
+                        /selector: ['"].*?['"],/,
+                        `selector: 'app-${componentName}',`
+                    );
+                    
+                    if (!componentTs.includes('selector:')) {
+                        componentTs = componentTs.replace(
+                            /@Component\(\{/,
+                            `@Component({\n  selector: 'app-${componentName}',`
+                        );
+                    }
+                }
                 
                 // Comprobar si ya es standalone
                 if (!componentTs.includes('standalone: true')) {
@@ -328,7 +1129,25 @@ export class ExportService {
                 
                 fs.writeFileSync(path.join(componentDir, `${componentName}.component.ts`), componentTs);
             } else if (component.ts) {
-                fs.writeFileSync(path.join(componentDir, `${componentName}.component.ts`), component.ts);
+                // Para versiones anteriores de Angular, asegurar que el selector sea consistente
+                let componentTs = component.ts;
+                
+                // Corregir el selector si no es consistente
+                if (!componentTs.includes(`selector: '${componentName}'`) && !componentTs.includes(`selector: "app-${componentName}"`)) {
+                    componentTs = componentTs.replace(
+                        /selector: ['"].*?['"],/,
+                        `selector: 'app-${componentName}',`
+                    );
+                    
+                    if (!componentTs.includes('selector:')) {
+                        componentTs = componentTs.replace(
+                            /@Component\(\{/,
+                            `@Component({\n  selector: 'app-${componentName}',`
+                        );
+                    }
+                }
+                
+                fs.writeFileSync(path.join(componentDir, `${componentName}.component.ts`), componentTs);
             }
             
             if (component.html) {

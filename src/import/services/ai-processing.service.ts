@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { v4 as uuidv4 } from 'uuid';
-import { promptIAComponentsAngular } from "../constants/prompts";
+import { promptIABoceto, promptIAComponentsAngular } from "../constants/prompts";
 import OpenAI from "openai";
 
 interface Element {
@@ -61,7 +61,7 @@ export class AiProcessingService {
                         content: [
                             { 
                                 type: "text", 
-                                text: "Analiza esta imagen de boceto y extrae todos los elementos visuales para convertirlos en objetos JSON precisos. Genera un JSON con un array 'elements' que contenga todos los objetos detectados con coordenadas y propiedades exactas. Usa un canvas de 1000x1000 unidades." 
+                                text: promptIABoceto
                             },
                             {
                                 type: "image_url",

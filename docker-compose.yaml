@@ -1,16 +1,56 @@
 version: '3.8'
 services:
   diagram_db:
-    image: postgres:15
+    image: postgres:13
     restart: unless-stopped
     container_name: diagram_db_container
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: erick17
-      POSTGRES_DB: diagrambd
+      POSTGRES_PASSWORD: hiachi20
+      POSTGRES_DB: Diagrama
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend_container
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY_JWT: ${SECRET_KEY_JWT}
+      ACCOUNT_EMAIL: ${ACCOUNT_EMAIL}
+      PASSWORD_EMAIL: ${PASSWORD_EMAIL}
+      HOST_EMAIL: ${HOST_EMAIL}
+      URL_FRONTEND: ${URL_FRONTEND}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LIVEBLOCKS_SECRET_KEY: ${LIVEBLOCKS_SECRET_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      diagram_db:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+    networks:
+      - app-network
+
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
