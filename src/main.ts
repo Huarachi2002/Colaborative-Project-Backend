@@ -18,7 +18,7 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });
-  await app.listen(port, ()=> {
+  await app.listen(port, '0.0.0.0', ()=> {
     Logger.log(`Server in port ${port}`)
   });
 }
