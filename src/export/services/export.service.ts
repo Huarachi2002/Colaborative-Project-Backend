@@ -656,63 +656,612 @@ export class AppComponent {
     
     private async addGeneratedComponentsToProject(projectDir: string, generatedComponents: any, options: any): Promise<void> {
         try {
-            this.logger.log('Añadiendo componentes generados al proyecto...');
+            this.logger.log('Añadiendo componentes generados por la IA al proyecto...');
             
             // Determinar si estamos usando Angular con componentes standalone
             const isStandaloneComponent = this.isUsingStandaloneComponents(projectDir);
             const isAngular19Plus = this.determineAngularVersion() >= 19;
             
-            // Organizar componentes por funcionalidad/módulo si es apropiado
-            const componentsByFeature = this.organizeComponentsByFeature(generatedComponents.components || {});
-            
-            // Crear feature modules si no es un proyecto standalone y hay suficientes componentes
-            if (!isStandaloneComponent && !isAngular19Plus && Object.keys(componentsByFeature).length > 1) {
-                await this.createFeatureModules(projectDir, componentsByFeature, options);
+            // Crear directorio para componentes si no existe
+            const componentsDir = path.join(projectDir, 'src', 'app', 'components');
+            if (!fs.existsSync(componentsDir)) {
+                fs.mkdirSync(componentsDir, { recursive: true });
             }
             
-            // Actualizar app.module.ts para incluir componentes y módulos generados
-            if (!isStandaloneComponent && !isAngular19Plus) {
-                await this.updateAppModule(projectDir, generatedComponents, componentsByFeature);
+            // Crear directorio para servicios si no existe
+            const servicesDir = path.join(projectDir, 'src', 'app', 'services');
+            if (!fs.existsSync(servicesDir)) {
+                fs.mkdirSync(servicesDir, { recursive: true });
             }
             
-            // Agregar componentes asegurando la estructura de carpetas correcta
+            // Crear directorio para modelos si no existe
+            const modelsDir = path.join(projectDir, 'src', 'app', 'models');
+            if (!fs.existsSync(modelsDir)) {
+                fs.mkdirSync(modelsDir, { recursive: true });
+            }
+            
+            // Mantener un registro de componentes generados para referencias cruzadas
+            const createdComponents = new Map();
+            
+            // 1. Generar componentes - conservando el contenido creado por la IA
             if (generatedComponents.components) {
-                await this.addComponentsToProject(projectDir, generatedComponents.components);
+                this.logger.log('Generando estructura para componentes usando Angular CLI...');
+                
+                for (const componentName in generatedComponents.components) {
+                    try {
+                        const component = generatedComponents.components[componentName];
+                        const sanitizedName = componentName.replace(/^app-/, ''); // Eliminar prefijo app- si existe
+                        
+                        // 1.A. Generar estructura base del componente con el CLI
+                        let command = `cd "${projectDir}" && npx ng generate component components/${sanitizedName} --skip-tests`;
+                        
+                        // Aplicar opciones según la versión y configuración
+                        if (isAngular19Plus) {
+                            command += ` --standalone`;
+                        }
+                        
+                        const styleExt = this.getStyleExtensionFromAngularJson(projectDir);
+                        command += ` --style=${styleExt}`;
+                        
+                        this.logger.log(`Generando estructura para componente ${sanitizedName} con Angular CLI...`);
+                        await execAsync(command);
+                        
+                        // 1.B. Preservar el contenido generado por la IA
+                        const componentDir = path.join(componentsDir, sanitizedName);
+                        
+                        // Actualizar HTML con el contenido de la IA
+                        if (component.html) {
+                            fs.writeFileSync(path.join(componentDir, `${sanitizedName}.component.html`), component.html);
+                        }
+                        
+                        // Actualizar CSS/SCSS con el contenido de la IA
+                        if (component.scss || component.css) {
+                            fs.writeFileSync(
+                                path.join(componentDir, `${sanitizedName}.component.${styleExt}`), 
+                                component.scss || component.css
+                            );
+                        }
+                        
+                        // Fusionar el TS generado por el CLI con el contenido de la IA
+                        if (component.ts) {
+                            const cliGeneratedTs = fs.readFileSync(path.join(componentDir, `${sanitizedName}.component.ts`), 'utf8');
+                            const aiGeneratedTs = component.ts;
+                            
+                            // Extraer lógica de componente de la IA pero preservar estructura del CLI
+                            const mergedTs = this.mergeComponentContent(cliGeneratedTs, aiGeneratedTs);
+                            fs.writeFileSync(path.join(componentDir, `${sanitizedName}.component.ts`), mergedTs);
+                            
+                            // Guardar referencia al componente para referencias cruzadas
+                            createdComponents.set(componentName, {
+                                name: sanitizedName,
+                                className: this.getComponentClassName(sanitizedName),
+                                path: `./components/${sanitizedName}/${sanitizedName}.component`
+                            });
+                        }
+                    } catch (error) {
+                        this.logger.error(`Error generando estructura para componente ${componentName}: ${error.message}`);
+                        
+                        // Si falla el CLI, crear manualmente preservando el contenido de la IA
+                        await this.addComponentManually(projectDir, componentName, generatedComponents.components[componentName]);
+                    }
+                }
             }
             
-            // Agregar servicios
+            // 2. Generar servicios - mezclando servicios IA con CRUD autogenerado
             if (generatedComponents.services) {
-                await this.addServicesToProject(projectDir, generatedComponents.services);
+                this.logger.log('Generando estructura para servicios usando Angular CLI...');
+                
+                for (const serviceName in generatedComponents.services) {
+                    try {
+                        const sanitizedName = serviceName.replace(/Service$/, '').toLowerCase();
+                        
+                        // 2.A. Generar estructura base del servicio con el CLI
+                        const command = `cd "${projectDir}" && npx ng generate service services/${sanitizedName} --skip-tests`;
+                        
+                        this.logger.log(`Generando estructura para servicio ${sanitizedName} con Angular CLI...`);
+                        await execAsync(command);
+                        
+                        // 2.B. Preservar el contenido generado por la IA
+                        const servicePath = path.join(servicesDir, `${sanitizedName}.service.ts`);
+                        
+                        if (fs.existsSync(servicePath)) {
+                            // Extraer funcionalidades específicas de la IA pero preservar estructura del CLI
+                            const cliGeneratedService = fs.readFileSync(servicePath, 'utf8');
+                            const aiGeneratedService = generatedComponents.services[serviceName];
+                            
+                            const mergedService = this.mergeServiceContent(cliGeneratedService, aiGeneratedService);
+                            fs.writeFileSync(servicePath, mergedService);
+                        }
+                    } catch (error) {
+                        this.logger.error(`Error generando estructura para servicio ${serviceName}: ${error.message}`);
+                        
+                        // Si falla el CLI, escribir el servicio directamente preservando el contenido de la IA
+                        const serviceContent = generatedComponents.services[serviceName];
+                        const sanitizedName = serviceName.replace(/Service$/, '').toLowerCase();
+                        fs.writeFileSync(path.join(servicesDir, `${sanitizedName}.service.ts`), serviceContent);
+                    }
+                }
             }
             
-            // Agregar modelos
-            if (generatedComponents.models) {
-                await this.addModelsToProject(projectDir, generatedComponents.models);
+            // 3. Detectar y generar modelos a partir del contenido de la IA
+            const detectedModels = this.detectModelsFromComponents(generatedComponents.components || {});
+            
+            if (Object.keys(detectedModels).length > 0 || generatedComponents.models) {
+                this.logger.log('Generando modelos basados en componentes detectados...');
+                
+                // Combinar modelos explícitos con los detectados automáticamente
+                const allModels = { ...(generatedComponents.models || {}), ...detectedModels };
+                
+                for (const modelName in allModels) {
+                    const sanitizedName = modelName.toLowerCase();
+                    const modelContent = allModels[modelName];
+                    fs.writeFileSync(path.join(modelsDir, `${sanitizedName}.model.ts`), modelContent);
+                }
             }
             
-            // Actualizar rutas si es necesario
+            // 4. Generar servicios CRUD basados en modelos detectados
+            if (Object.keys(detectedModels).length > 0 && options.generateCrud !== false) {
+                this.logger.log('Generando servicios CRUD para modelos detectados...');
+                
+                for (const modelName in detectedModels) {
+                    const sanitizedName = modelName.toLowerCase();
+                    const serviceFileName = `${sanitizedName}.service.ts`;
+                    const servicePath = path.join(servicesDir, serviceFileName);
+                    
+                    // Verificar si ya existe un servicio para este modelo
+                    if (!fs.existsSync(servicePath)) {
+                        // Generar servicio CRUD
+                        const crudServiceContent = this.generateCrudServiceForModel(modelName, detectedModels[modelName]);
+                        fs.writeFileSync(servicePath, crudServiceContent);
+                    } else {
+                        // Si ya existe, verificar si tiene operaciones CRUD
+                        const existingService = fs.readFileSync(servicePath, 'utf8');
+                        if (!this.serviceHasCrudOperations(existingService)) {
+                            // Mejorarlo con operaciones CRUD
+                            const enhancedService = this.enhanceServiceWithCrud(existingService, modelName);
+                            fs.writeFileSync(servicePath, enhancedService);
+                        }
+                    }
+                }
+            }
+            
+            // 5. Actualizar módulos y configuración de rutas
             if (options.includeRouting) {
-                // Para Angular 19+/standalone components, asegurar configuración de rutas correcta
+                this.logger.log('Actualizando configuración de rutas...');
+                
                 if (isStandaloneComponent || isAngular19Plus) {
-                    await this.updateRoutingModule(projectDir, generatedComponents);
-                    // Asegurar que app.config.ts tenga la configuración correcta para las rutas
+                    // Para Angular 19+/standalone components
+                    await this.updateAppRoutesForStandalone(projectDir, createdComponents);
                     await this.updateAppConfig(projectDir, options);
                 } else {
-                    // Para Angular tradicional con módulos
+                    // Para Angular < 19 con módulos
                     await this.updateRoutingModule(projectDir, generatedComponents);
                 }
             }
             
-            // Verificar y corregir los selectores de componentes
-            await this.verifyComponentSelectors(projectDir, generatedComponents.components || {});
+            // 6. Actualizar el componente principal (app)
+            this.logger.log('Actualizando componente principal de la aplicación...');
             
-            this.logger.log('Componentes generados añadidos correctamente');
+            if (generatedComponents.appComponent) {
+                // Si la IA generó un componente app específico, usarlo
+                this.updateAppComponentWithAiGenerated(projectDir, generatedComponents.appComponent, options);
+            } else {
+                // Sino, crear un componente app adaptado a los componentes generados
+                this.updateAppComponent(projectDir, generatedComponents, options);
+            }
+            
+            // 7. Actualizar environment.ts para incluir la URL de la API
+            await this.updateEnvironmentFile(projectDir);
+            
+            // 8. Verificar si hay errores en los componentes generados
+            this.logger.log('Verificando componentes generados para posibles errores...');
+            await this.verifyGeneratedComponents(projectDir, createdComponents);
+            
+            this.logger.log('Componentes generados por la IA añadidos correctamente al proyecto');
         } catch (error) {
             this.logger.error('Error añadiendo componentes generados:', error);
             throw new Error('Error al agregar componentes generados: ' + error.message);
         }
     }
     
+    /**
+     * Verifica si un servicio ya tiene operaciones CRUD
+     */
+    private serviceHasCrudOperations(serviceContent: string): boolean {
+        const crudMethods = ['getAll', 'getById', 'create', 'update', 'delete'];
+        const hasEnoughCrud = crudMethods.filter(method => serviceContent.includes(method)).length >= 3;
+        return hasEnoughCrud;
+    }
+    
+    /**
+     * Mejora un servicio existente con operaciones CRUD
+     */
+    private enhanceServiceWithCrud(existingService: string, modelName: string): string {
+        // Si ya tiene @Injectable y estructura básica, mantenerlos
+        const className = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+        const modelVarName = modelName.toLowerCase();
+        
+        // Buscar el final de la clase para añadir métodos CRUD
+        const classEndIndex = existingService.lastIndexOf('}');
+        
+        if (classEndIndex === -1) {
+            return existingService; // No se puede identificar la clase
+        }
+        
+        // Añadir importaciones necesarias si no existen
+        let enhancedService = existingService;
+        
+        if (!enhancedService.includes('import { HttpClient')) {
+            enhancedService = enhancedService.replace(
+                'import { Injectable',
+                'import { HttpClient, HttpHeaders } from \'@angular/common/http\';\nimport { Observable, throwError } from \'rxjs\';\nimport { catchError, tap } from \'rxjs/operators\';\nimport { environment } from \'../../environments/environment\';\n\nimport { Injectable'
+            );
+        }
+        
+        // Verificar si hay una definición de modelo/interfaz
+        if (!enhancedService.includes(`interface ${className}`) && !enhancedService.includes(`class ${className}`)) {
+            // Añadir interfaz básica para el modelo
+            enhancedService = `export interface ${className} {\n  id: number | string;\n  [key: string]: any;\n}\n\n` + enhancedService;
+        }
+        
+        // Añadir propiedad para la URL de API si no existe
+        if (!enhancedService.includes('apiUrl')) {
+            const constructorMatch = enhancedService.match(/constructor\s*\((.*?)\)\s*{/);
+            if (constructorMatch) {
+                // Añadir HttpClient al constructor si no existe
+                if (!constructorMatch[1].includes('http')) {
+                    enhancedService = enhancedService.replace(
+                        constructorMatch[0],
+                        `constructor(private http: HttpClient) {`
+                    );
+                }
+                
+                // Añadir apiUrl después del constructor
+                enhancedService = enhancedService.replace(
+                    constructorMatch[0],
+                    `${constructorMatch[0]}\n  private apiUrl = environment.apiUrl + '/${modelVarName}s';\n`
+                );
+            }
+        }
+        
+        // Preparar métodos CRUD para añadir
+        const crudMethods = `
+  /**
+   * Obtiene todos los registros
+   */
+  getAll(): Observable<${className}[]> {
+    return this.http.get<${className}[]>(this.apiUrl).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Obtiene un registro por su ID
+   */
+  getById(id: number | string): Observable<${className}> {
+    const url = \`\${this.apiUrl}/\${id}\`;
+    return this.http.get<${className}>(url).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Crea un nuevo registro
+   */
+  create(${modelVarName}: Omit<${className}, 'id'>): Observable<${className}> {
+    return this.http.post<${className}>(this.apiUrl, ${modelVarName}).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Actualiza un registro existente
+   */
+  update(${modelVarName}: ${className}): Observable<${className}> {
+    const url = \`\${this.apiUrl}/\${${modelVarName}.id}\`;
+    return this.http.put<${className}>(url, ${modelVarName}).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Elimina un registro por su ID
+   */
+  delete(id: number | string): Observable<any> {
+    const url = \`\${this.apiUrl}/\${id}\`;
+    return this.http.delete<any>(url).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Manejo de errores HTTP
+   */
+  private handleError(error: any) {
+    let errorMessage = '';
+    if (error.error instanceof ErrorEvent) {
+      // Error del cliente
+      errorMessage = \`Error: \${error.error.message}\`;
+    } else {
+      // Error del servidor
+      errorMessage = \`Código de error: \${error.status}\\nMensaje: \${error.message}\`;
+    }
+    console.error(errorMessage);
+    return throwError(() => new Error(errorMessage));
+  }`;
+        
+        // Añadir métodos CRUD al final de la clase
+        enhancedService = enhancedService.substring(0, classEndIndex) + crudMethods + "\n}" + enhancedService.substring(classEndIndex + 1);
+        
+        return enhancedService;
+    }
+    
+    /**
+     * Actualiza las rutas para proyecto con componentes standalone
+     */
+    private async updateAppRoutesForStandalone(projectDir: string, components: Map<string, any>): Promise<void> {
+        const appRoutesPath = path.join(projectDir, 'src', 'app', 'app.routes.ts');
+        
+        if (!fs.existsSync(appRoutesPath)) {
+            // Si no existe el archivo de rutas, crearlo
+            let routesContent = `import { Routes } from '@angular/router';\n\n`;
+            
+            // Importar componentes
+            for (const [_, component] of components.entries()) {
+                routesContent += `import { ${component.className} } from '${component.path}';\n`;
+            }
+            
+            routesContent += `\nexport const routes: Routes = [\n`;
+            
+            // Crear rutas para cada componente
+            const componentEntries = Array.from(components.entries());
+            componentEntries.forEach(([origName, component], index) => {
+                const path = component.name;
+                routesContent += `  { path: '${path}', component: ${component.className} }${index < componentEntries.length - 1 ? ',' : ''}\n`;
+            });
+            
+            // Añadir ruta por defecto si hay al menos un componente
+            if (componentEntries.length > 0) {
+                const [_, firstComponent] = componentEntries[0];
+                routesContent += `,\n  { path: '', redirectTo: '${firstComponent.name}', pathMatch: 'full' },\n`;
+                routesContent += `  { path: '**', redirectTo: '${firstComponent.name}' }\n`;
+            }
+            
+            routesContent += `];\n`;
+            
+            fs.writeFileSync(appRoutesPath, routesContent);
+            return;
+        }
+        
+        // Si existe, actualizar el archivo de rutas
+        let routesContent = fs.readFileSync(appRoutesPath, 'utf8');
+        
+        // Añadir importaciones de componentes
+        let importsToAdd = '';
+        for (const [_, component] of components.entries()) {
+            const importStatement = `import { ${component.className} } from '${component.path}';`;
+            if (!routesContent.includes(importStatement) && !routesContent.includes(component.className)) {
+                importsToAdd += importStatement + '\n';
+            }
+        }
+        
+        if (importsToAdd) {
+            // Añadir después de la última importación o al principio
+            const lastImportIndex = routesContent.lastIndexOf('import ');
+            const lastImportEndIndex = routesContent.indexOf(';', lastImportIndex) + 1;
+            
+            if (lastImportIndex !== -1) {
+                routesContent = routesContent.substring(0, lastImportEndIndex) + '\n' + importsToAdd + routesContent.substring(lastImportEndIndex);
+            } else {
+                routesContent = importsToAdd + routesContent;
+            }
+        }
+        
+        // Añadir rutas para los componentes
+        if (components.size > 0) {
+            // Encontrar el array de rutas
+            const routesArrayStartIndex = routesContent.indexOf('export const routes: Routes = [');
+            if (routesArrayStartIndex !== -1) {
+                const routesArrayEndIndex = routesContent.indexOf('];', routesArrayStartIndex);
+                if (routesArrayEndIndex !== -1) {
+                    // Extraer el contenido actual del array de rutas
+                    const currentRoutesArray = routesContent.substring(routesArrayStartIndex + 30, routesArrayEndIndex).trim();
+                    
+                    // Preparar las nuevas rutas a añadir
+                    let newRoutes = '';
+                    for (const [_, component] of components.entries()) {
+                        const routePath = `{ path: '${component.name}', component: ${component.className} }`;
+                        if (!currentRoutesArray.includes(routePath)) {
+                            newRoutes += `  ${routePath},\n`;
+                        }
+                    }
+                    
+                    // Añadir las nuevas rutas al array
+                    if (newRoutes) {
+                        const updatedRoutesArray = currentRoutesArray ? currentRoutesArray + ',\n' + newRoutes : newRoutes;
+                        routesContent = routesContent.substring(0, routesArrayStartIndex + 30) + '\n' + updatedRoutesArray + routesContent.substring(routesArrayEndIndex);
+                    }
+                }
+            }
+        }
+        
+        fs.writeFileSync(appRoutesPath, routesContent);
+    }
+    
+    /**
+     * Actualiza el componente app con el contenido generado por la IA
+     */
+    private updateAppComponentWithAiGenerated(projectDir: string, appComponent: any, options: any): void {
+        const appDir = path.join(projectDir, 'src', 'app');
+        const styleExt = this.getStyleExtensionFromAngularJson(projectDir);
+        
+        // Actualizar HTML
+        if (appComponent.html) {
+            fs.writeFileSync(path.join(appDir, 'app.component.html'), appComponent.html);
+        }
+        
+        // Actualizar TS
+        if (appComponent.ts) {
+            // Leer el archivo actual
+            const currentAppTs = fs.existsSync(path.join(appDir, 'app.component.ts')) ? 
+                fs.readFileSync(path.join(appDir, 'app.component.ts'), 'utf8') : '';
+            
+            // Fusionar con el contenido generado por la IA
+            const mergedTs = currentAppTs ? 
+                this.mergeComponentContent(currentAppTs, appComponent.ts) : 
+                appComponent.ts;
+                
+            fs.writeFileSync(path.join(appDir, 'app.component.ts'), mergedTs);
+        }
+        
+        // Actualizar CSS/SCSS
+        if (appComponent.scss || appComponent.css) {
+            fs.writeFileSync(
+                path.join(appDir, `app.component.${styleExt}`),
+                appComponent.scss || appComponent.css
+            );
+        }
+    }
+    
+    /**
+     * Verifica los componentes generados en busca de errores
+     */
+    private async verifyGeneratedComponents(projectDir: string, components: Map<string, any>): Promise<void> {
+        // Verificar si hay errores de compilación en los componentes
+        try {
+            // Ejecutar una compilación en modo desarrollo para verificar errores
+            this.logger.log('Verificando componentes generados con compilación...');
+            await execAsync(`cd "${projectDir}" && npx ng build --configuration development`, { timeout: 60000 });
+            this.logger.log('Verificación completada con éxito - No se encontraron errores');
+        } catch (error) {
+            // Si hay errores, intentar corregir los más comunes
+            this.logger.warn(`Se encontraron posibles errores en la compilación: ${error.message}`);
+            
+            // Intentar corregir errores comunes
+            for (const [origName, component] of components.entries()) {
+                const componentTsPath = path.join(projectDir, 'src', 'app', component.path + '.ts');
+                
+                if (fs.existsSync(componentTsPath)) {
+                    let tsContent = fs.readFileSync(componentTsPath, 'utf8');
+                    
+                    // Corregir problemas comunes
+                    tsContent = this.fixCommonComponentErrors(tsContent);
+                    
+                    fs.writeFileSync(componentTsPath, tsContent);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Corrige errores comunes en componentes
+     */
+    private fixCommonComponentErrors(tsContent: string): string {
+        let fixed = tsContent;
+        
+        // 1. Corregir uso de ngModel sin FormsModule
+        if (fixed.includes('[(ngModel)]') && !fixed.includes('FormsModule')) {
+            // Añadir FormsModule a imports
+            if (fixed.includes('imports: [')) {
+                fixed = fixed.replace(
+                    /imports: \[([^\]]*)\]/,
+                    (match, imports) => `imports: [${imports}${imports.trim().endsWith(',') ? '' : ','} FormsModule]`
+                );
+            } else if (fixed.includes('@Component')) {
+                fixed = fixed.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [FormsModule],'
+                );
+            }
+            
+            // Añadir importación de FormsModule
+            if (!fixed.includes("import { FormsModule }")) {
+                fixed = "import { FormsModule } from '@angular/forms';\n" + fixed;
+            }
+        }
+        
+        // 2. Corregir formGroup sin ReactiveFormsModule
+        if ((fixed.includes('formGroup') || fixed.includes('FormGroup')) && !fixed.includes('ReactiveFormsModule')) {
+            // Añadir ReactiveFormsModule a imports
+            if (fixed.includes('imports: [')) {
+                fixed = fixed.replace(
+                    /imports: \[([^\]]*)\]/,
+                    (match, imports) => `imports: [${imports}${imports.trim().endsWith(',') ? '' : ','} ReactiveFormsModule]`
+                );
+            } else if (fixed.includes('@Component')) {
+                fixed = fixed.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [ReactiveFormsModule],'
+                );
+            }
+            
+            // Añadir importación de ReactiveFormsModule
+            if (!fixed.includes("import { ReactiveFormsModule }")) {
+                fixed = "import { ReactiveFormsModule } from '@angular/forms';\n" + fixed;
+            }
+        }
+        
+        // 3. Corregir propiedades @Input sin inicializar
+        fixed = fixed.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*string;/g,
+            '@Input() $1: string = \'\';'
+        );
+        
+        fixed = fixed.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*number;/g,
+            '@Input() $1: number = 0;'
+        );
+        
+        fixed = fixed.replace(
+            /@Input\(\)\s+(\w+)\s*:\s*boolean;/g,
+            '@Input() $1: boolean = false;'
+        );
+        
+        // 4. Añadir implementación de OnInit si se usa ngOnInit pero no se implementa la interfaz
+        if (fixed.includes('ngOnInit') && !fixed.includes('implements OnInit')) {
+            fixed = fixed.replace(
+                /export class (\w+)/,
+                'export class $1 implements OnInit'
+            );
+            
+            // Añadir importación de OnInit
+            if (!fixed.includes("import { OnInit }")) {
+                if (fixed.includes("import { Component")) {
+                    fixed = fixed.replace(
+                        /import { Component/,
+                        'import { Component, OnInit'
+                    );
+                } else {
+                    fixed = "import { OnInit } from '@angular/core';\n" + fixed;
+                }
+            }
+        }
+        
+        // 5. Corregir directivas estructurales sin CommonModule
+        if ((fixed.includes('*ngFor') || fixed.includes('*ngIf') || fixed.includes('[ngClass]')) && !fixed.includes('CommonModule')) {
+            // Añadir CommonModule a imports
+            if (fixed.includes('imports: [')) {
+                fixed = fixed.replace(
+                    /imports: \[([^\]]*)\]/,
+                    (match, imports) => `imports: [${imports}${imports.trim().endsWith(',') ? '' : ','} CommonModule]`
+                );
+            } else if (fixed.includes('@Component')) {
+                fixed = fixed.replace(
+                    /@Component\(\{/,
+                    '@Component({\n  imports: [CommonModule],'
+                );
+            }
+            
+            // Añadir importación de CommonModule
+            if (!fixed.includes("import { CommonModule }")) {
+                fixed = "import { CommonModule } from '@angular/common';\n" + fixed;
+            }
+        }
+        
+        return fixed;
+    }
+    
+
     /**
      * Organiza componentes en grupos por posible funcionalidad (basado en nombres)
      */
@@ -1817,6 +2366,924 @@ export class AppComponent {
             platform: "UNIX",
             comment: "Proyecto Angular generado por Collaborative Project"
         });
+    }
+    
+
+    /**
+     * Usa el Angular CLI para generar componentes
+     */
+    private async generateComponentWithCLI(projectDir: string, componentName: string, options: any): Promise<void> {
+        try {
+            const sanitizedName = componentName.replace(/^app-/, ''); // Eliminar prefijo app- si existe
+            
+            let command = `cd "${projectDir}" && npx ng generate component ${sanitizedName} --skip-tests`;
+            
+            // Aplicar opciones según la versión y configuración
+            if (this.determineAngularVersion() >= 19) {
+                command += ` --standalone`;
+            }
+            
+            if (options.cssFramework === 'scss' || options.cssFramework === 'sass') {
+                command += ` --style=scss`;
+            } else if (options.cssFramework === 'less') {
+                command += ` --style=less`;
+            } else {
+                command += ` --style=css`;
+            }
+            
+            this.logger.log(`Generando componente ${sanitizedName} con Angular CLI...`);
+            const { stdout } = await execAsync(command);
+            this.logger.log(`Componente generado: ${stdout}`);
+            
+            return;
+        } catch (error) {
+            this.logger.error(`Error generando componente con CLI: ${error.message}`);
+            throw new Error(`Error al generar componente con Angular CLI: ${error.message}`);
+        }
+    }
+
+    /**
+     * Usa el Angular CLI para generar servicios
+     */
+    private async generateServiceWithCLI(projectDir: string, serviceName: string): Promise<void> {
+        try {
+            const sanitizedName = serviceName.replace(/Service$/, '').toLowerCase(); // Normalizar nombre
+            
+            const command = `cd "${projectDir}" && npx ng generate service services/${sanitizedName} --skip-tests`;
+            
+            this.logger.log(`Generando servicio ${sanitizedName} con Angular CLI...`);
+            const { stdout } = await execAsync(command);
+            this.logger.log(`Servicio generado: ${stdout}`);
+            
+            return;
+        } catch (error) {
+            this.logger.error(`Error generando servicio con CLI: ${error.message}`);
+            throw new Error(`Error al generar servicio con Angular CLI: ${error.message}`);
+        }
+    }
+
+    /**
+     * Genera servicios CRUD para los modelos detectados
+     */
+    private async generateCrudServices(projectDir: string, models: any): Promise<any> {
+        const servicesDir = path.join(projectDir, 'src', 'app', 'services');
+        
+        if (!fs.existsSync(servicesDir)) {
+            fs.mkdirSync(servicesDir, { recursive: true });
+        }
+        
+        const generatedServices = {};
+        
+        for (const modelName in models) {
+            const serviceName = `${modelName.toLowerCase()}.service`;
+            const className = modelName.charAt(0).toUpperCase() + modelName.slice(1) + 'Service';
+            
+            // Generar servicio CRUD completo para este modelo
+            const serviceContent = this.generateCrudServiceForModel(modelName, models[modelName]);
+            
+            // Guardar el servicio generado
+            const servicePath = path.join(servicesDir, serviceName + '.ts');
+            fs.writeFileSync(servicePath, serviceContent);
+            
+            generatedServices[serviceName] = serviceContent;
+            
+            this.logger.log(`Servicio CRUD generado para modelo ${modelName}`);
+        }
+        
+        return generatedServices;
+    }
+    
+    /**
+     * Genera un servicio CRUD para un modelo específico
+     */
+    private generateCrudServiceForModel(modelName: string, modelSchema: any): string {
+        const className = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+        const serviceClassName = className + 'Service';
+        
+        // Analizar el esquema del modelo para determinar propiedades y tipos
+        const modelProperties = this.extractModelProperties(modelSchema);
+        
+        // Generar interfaz del modelo
+        const modelInterface = this.generateModelInterface(className, modelProperties);
+        
+        // Generar el servicio
+        const serviceContent = `import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, throwError, BehaviorSubject } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
+
+${modelInterface}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ${serviceClassName} {
+  private apiUrl = environment.apiUrl + '/${modelName.toLowerCase()}s';
+  private ${modelName.toLowerCase()}sSubject = new BehaviorSubject<${className}[]>([]);
+  ${modelName.toLowerCase()}s$ = this.${modelName.toLowerCase()}sSubject.asObservable();
+
+  private httpOptions = {
+    headers: new HttpHeaders({ 'Content-Type': 'application/json' })
+  };
+
+  constructor(private http: HttpClient) {
+    // Cargar datos iniciales al instanciar el servicio
+    this.getAll().subscribe();
+  }
+
+  /**
+   * Obtiene todos los registros
+   */
+  getAll(): Observable<${className}[]> {
+    return this.http.get<${className}[]>(this.apiUrl).pipe(
+      tap(data => this.${modelName.toLowerCase()}sSubject.next(data)),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Obtiene un registro por su ID
+   */
+  getById(id: number | string): Observable<${className}> {
+    const url = \`\${this.apiUrl}/\${id}\`;
+    return this.http.get<${className}>(url).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Crea un nuevo registro
+   */
+  create(${modelName.toLowerCase()}: Omit<${className}, 'id'>): Observable<${className}> {
+    return this.http.post<${className}>(this.apiUrl, ${modelName.toLowerCase()}, this.httpOptions).pipe(
+      tap(newItem => {
+        const currentItems = this.${modelName.toLowerCase()}sSubject.value;
+        this.${modelName.toLowerCase()}sSubject.next([...currentItems, newItem]);
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Actualiza un registro existente
+   */
+  update(${modelName.toLowerCase()}: ${className}): Observable<${className}> {
+    const url = \`\${this.apiUrl}/\${${modelName.toLowerCase()}.id}\`;
+    return this.http.put<${className}>(url, ${modelName.toLowerCase()}, this.httpOptions).pipe(
+      tap(() => {
+        const currentItems = this.${modelName.toLowerCase()}sSubject.value;
+        const index = currentItems.findIndex(item => item.id === ${modelName.toLowerCase()}.id);
+        if (index !== -1) {
+          const updatedItems = [...currentItems];
+          updatedItems[index] = ${modelName.toLowerCase()};
+          this.${modelName.toLowerCase()}sSubject.next(updatedItems);
+        }
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Elimina un registro por su ID
+   */
+  delete(id: number | string): Observable<any> {
+    const url = \`\${this.apiUrl}/\${id}\`;
+    return this.http.delete<any>(url, this.httpOptions).pipe(
+      tap(() => {
+        const currentItems = this.${modelName.toLowerCase()}sSubject.value;
+        this.${modelName.toLowerCase()}sSubject.next(currentItems.filter(item => item.id !== id));
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Busca registros que coincidan con un término
+   */
+  search(term: string): Observable<${className}[]> {
+    if (!term.trim()) {
+      return this.getAll();
+    }
+    
+    return this.http.get<${className}[]>(\`\${this.apiUrl}/search?term=\${term}\`).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Manejo de errores HTTP
+   */
+  private handleError(error: any) {
+    let errorMessage = '';
+    if (error.error instanceof ErrorEvent) {
+      // Error del cliente
+      errorMessage = \`Error: \${error.error.message}\`;
+    } else {
+      // Error del servidor
+      errorMessage = \`Código de error: \${error.status}\\nMensaje: \${error.message}\`;
+    }
+    console.error(errorMessage);
+    return throwError(() => new Error(errorMessage));
+  }
+}`;
+
+        return serviceContent;
+    }
+
+    /**
+     * Extrae propiedades y tipos de un modelo
+     */
+    private extractModelProperties(modelSchema: string): Map<string, string> {
+        const properties = new Map<string, string>();
+        
+        try {
+            // Si es una interfaz/clase TypeScript, extraer propiedades
+            const interfacePattern = /interface\s+\w+\s*\{([^}]*)\}/;
+            const classPattern = /class\s+\w+\s*\{([^}]*)\}/;
+            
+            let match = modelSchema.match(interfacePattern) || modelSchema.match(classPattern);
+            
+            if (match && match[1]) {
+                const propertiesText = match[1];
+                // Buscar propiedades con formato nombre: tipo
+                const propertyPattern = /(\w+)\s*:\s*([\w\[\]<>|]+)/g;
+                let propMatch;
+                
+                while ((propMatch = propertyPattern.exec(propertiesText)) !== null) {
+                    properties.set(propMatch[1], propMatch[2]);
+                }
+            } else {
+                // Si no se reconoce como interfaz/clase, intentar analizar como objeto JSON
+                try {
+                    const obj = typeof modelSchema === 'string' ? JSON.parse(modelSchema) : modelSchema;
+                    
+                    // Convertir valores del objeto a tipos TypeScript
+                    for (const [key, value] of Object.entries(obj)) {
+                        let type = 'any';
+                        
+                        if (typeof value === 'string') type = 'string';
+                        else if (typeof value === 'number') type = 'number';
+                        else if (typeof value === 'boolean') type = 'boolean';
+                        else if (Array.isArray(value)) type = 'any[]';
+                        else if (typeof value === 'object') type = 'object';
+                        
+                        properties.set(key, type);
+                    }
+                } catch (e) {
+                    // Si no se puede analizar como JSON, asumir que es un objeto simple
+                    properties.set('id', 'number');
+                    properties.set('name', 'string');
+                    properties.set('description', 'string');
+                    properties.set('createdAt', 'Date');
+                }
+            }
+        } catch (error) {
+            this.logger.error('Error analizando esquema del modelo:', error);
+            // Propiedades por defecto
+            properties.set('id', 'number');
+            properties.set('name', 'string');
+            properties.set('createdAt', 'Date');
+        }
+        
+        return properties;
+    }
+
+    /**
+     * Genera una interfaz TypeScript para un modelo
+     */
+    private generateModelInterface(className: string, properties: Map<string, string>): string {
+        let interfaceContent = `export interface ${className} {\n`;
+        
+        for (const [name, type] of properties.entries()) {
+            interfaceContent += `  ${name}: ${type};\n`;
+        }
+        
+        interfaceContent += '}\n\n';
+        return interfaceContent;
+    }
+
+    /**
+     * Detecta y genera modelos de datos basados en componentes y elementos visuales
+     */
+    private detectModelsFromComponents(components: any): Record<string, any> {
+        const models: Record<string, any> = {};
+        const potentialModelPatterns = {
+            list: /list|table|grid|collection|items/i,
+            form: /form|edit|create|update|input/i,
+            detail: /detail|view|show|profile/i
+        };
+        
+        // Analizar componentes para detectar posibles modelos
+        for (const componentName in components) {
+            const component = components[componentName];
+            
+            // Buscar signos de listas o tablas en el HTML (suelen indicar modelos)
+            if (component.html && (
+                component.html.includes('<table') || 
+                component.html.includes('*ngFor') || 
+                component.html.includes('list-group')
+            )) {
+                // Extraer posible nombre de modelo del componente
+                const possibleModelName = this.extractModelNameFromComponent(componentName);
+                
+                if (possibleModelName && !models[possibleModelName]) {
+                    // Analizar HTML para identificar propiedades del modelo
+                    const properties = this.extractPropertiesFromHTML(component.html);
+                    
+                    // Crear modelo si se detectan suficientes propiedades
+                    if (Object.keys(properties).length >= 2) {
+                        models[possibleModelName] = this.generateModelInterface(
+                            possibleModelName, 
+                            new Map(Object.entries(properties))
+                        );
+                    }
+                }
+            }
+            
+            // Buscar formularios (suelen mapear a modelos)
+            if (component.html && (
+                component.html.includes('<form') || 
+                component.html.includes('formGroup') || 
+                component.html.includes('[(ngModel)]')
+            )) {
+                // Extraer posible nombre del modelo
+                let possibleModelName = this.extractModelNameFromComponent(componentName);
+                
+                // Si parece ser un formulario de edición, limpiar prefijos
+                if (componentName.includes('edit') || componentName.includes('form')) {
+                    possibleModelName = possibleModelName.replace(/(Edit|Form|Create|Update)/g, '');
+                }
+                
+                if (possibleModelName && !models[possibleModelName]) {
+                    // Extraer propiedades del formulario
+                    const properties = this.extractPropertiesFromForm(component.html, component.ts);
+                    
+                    // Crear modelo si se detectan suficientes propiedades
+                    if (Object.keys(properties).length >= 2) {
+                        models[possibleModelName] = this.generateModelInterface(
+                            possibleModelName, 
+                            new Map(Object.entries(properties))
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Consolidar modelos que podrían ser el mismo pero con ligeras diferencias de nombre
+        const finalModels = this.consolidateSimilarModels(models);
+        
+        return finalModels;
+    }
+    
+    /**
+     * Extrae un nombre de modelo a partir del nombre de un componente
+     */
+    private extractModelNameFromComponent(componentName: string): string {
+        // Eliminar prefijos comunes
+        const cleaned = componentName
+            .replace(/^app-/, '')
+            .replace(/-?list$|-?table$|-?grid$|-?form$|-?edit$|-?view$|-?detail$/, '');
+        
+        // Convertir a formato PascalCase para el nombre del modelo
+        return cleaned
+            .split('-')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('');
+    }
+    
+    /**
+     * Extrae propiedades de modelo a partir de HTML (buscando tablas, listas, etc.)
+     */
+    private extractPropertiesFromHTML(html: string): Record<string, string> {
+        const properties: Record<string, string> = {
+            'id': 'number'
+        };
+        
+        // Buscar interpolaciones {{ property }} que pueden indicar propiedades del modelo
+        const interpolationPattern = /{{([^}]+)}}/g;
+        let match;
+        
+        while ((match = interpolationPattern.exec(html)) !== null) {
+            let property = match[1].trim().split('.').pop();
+            
+            if (property && !property.includes('(') && !property.includes('+') && !property.includes('?')) {
+                // Inferir tipo basado en nombre
+                let type = 'string'; // por defecto
+                
+                if (property.includes('date') || property.includes('time')) {
+                    type = 'Date';
+                } else if (property.includes('price') || property.includes('amount') || 
+                          property.includes('qty') || property.includes('count') ||
+                          property.includes('total') || property.includes('id')) {
+                    type = 'number';
+                } else if (property.includes('active') || property.includes('enabled') ||
+                          property.includes('completed') || property.includes('visible')) {
+                    type = 'boolean';
+                }
+                
+                properties[property] = type;
+            }
+        }
+        
+        // Buscar ngFor que suelen indicar arrays de modelos
+        const ngForPattern = /\*ngFor="let (\w+) of ([^"]+)"/g;
+        
+        while ((match = ngForPattern.exec(html)) !== null) {
+            const itemName = match[1]; // Nombre del elemento individual en el ngFor
+            const collectionName = match[2].trim(); // Nombre del array/colección
+            
+            // Buscar propiedades accedidas desde el item
+            const itemPropertyPattern = new RegExp(`${itemName}\\.([\\w]+)`, 'g');
+            let propMatch;
+            
+            while ((propMatch = itemPropertyPattern.exec(html)) !== null) {
+                const propName = propMatch[1];
+                
+                // Inferir tipo basado en nombre
+                let type = 'string'; // por defecto
+                
+                if (propName.includes('date') || propName.includes('time')) {
+                    type = 'Date';
+                } else if (propName.includes('price') || propName.includes('amount') || 
+                          propName.includes('qty') || propName.includes('count') ||
+                          propName.includes('total') || propName.includes('id')) {
+                    type = 'number';
+                } else if (propName.includes('active') || propName.includes('enabled') ||
+                          propName.includes('completed')) {
+                    type = 'boolean';
+                }
+                
+                properties[propName] = type;
+            }
+        }
+        
+        return properties;
+    }
+    
+    /**
+     * Extrae propiedades de modelo desde un formulario
+     */
+    private extractPropertiesFromForm(html: string, ts: string): Record<string, string> {
+        const properties: Record<string, string> = {
+            'id': 'number'
+        };
+        
+        // Verificar si el formulario usa FormGroup (ReactiveFormsModule)
+        if (html.includes('formGroup') && ts) {
+            // Buscar formGroup en TS para identificar controles
+            const formGroupPattern = /this\.(\w+)\s*=\s*this\.(\w+)\.group\(\{([^}]+)\}\)/;
+            const match = ts.match(formGroupPattern);
+            
+            if (match) {
+                // Extraer la inicialización del formGroup
+                const formGroupText = match[3];
+                
+                // Extraer propiedades del formGroup (name: [value, validators])
+                const formControlPattern = /(\w+):\s*\[(.*?)\]/g;
+                let formControlMatch;
+                
+                while ((formControlMatch = formControlPattern.exec(formGroupText)) !== null) {
+                    const controlName = formControlMatch[1];
+                    const controlConfig = formControlMatch[2];
+                    
+                    // Inferir tipo basado en valor inicial y nombre
+                    let type = 'string'; // por defecto
+                    
+                    if (controlConfig.includes('null')) {
+                        // Podría ser cualquier tipo, usar el nombre para inferir
+                        if (controlName.includes('date') || controlName.includes('time')) {
+                            type = 'Date';
+                        } else if (controlName.includes('price') || controlName.includes('amount') || 
+                                 controlName.includes('qty') || controlName.includes('count') ||
+                                 controlName.includes('id')) {
+                            type = 'number';
+                        } else if (controlName.includes('active') || controlName.includes('enabled') ||
+                                  controlName.includes('completed')) {
+                            type = 'boolean';
+                        }
+                    } else if (controlConfig.includes('\'') || controlConfig.includes('"')) {
+                        type = 'string';
+                    } else if (controlConfig.match(/^\d+/) || controlConfig.includes('Validators.min')) {
+                        type = 'number';
+                    } else if (controlConfig.includes('true') || controlConfig.includes('false')) {
+                        type = 'boolean';
+                    }
+                    
+                    properties[controlName] = type;
+                }
+            }
+        } else {
+            // Para formularios con ngModel
+            const ngModelPattern = /\[(ngModel)\]="([^"]+)"/g;
+            let ngModelMatch;
+            
+            while ((ngModelMatch = ngModelPattern.exec(html)) !== null) {
+                const propPath = ngModelMatch[2].trim();
+                
+                // Extraer nombre de la propiedad (podría ser path como user.name)
+                const propName = propPath.split('.').pop();
+                
+                if (propName) {
+                    // Inferir tipo basado en tipo de input
+                    const inputTypePattern = new RegExp(`<input[^>]*\\[(ngModel)\\]="${propPath}"[^>]*type="([^"]+)"`, 'i');
+                    const typeMatch = html.match(inputTypePattern);
+                    
+                    let type = 'string'; // por defecto
+                    
+                    if (typeMatch) {
+                        const inputType = typeMatch[2];
+                        switch (inputType) {
+                            case 'number':
+                            case 'range':
+                                type = 'number';
+                                break;
+                            case 'checkbox':
+                                type = 'boolean';
+                                break;
+                            case 'date':
+                            case 'datetime-local':
+                                type = 'Date';
+                                break;
+                            default:
+                                type = 'string';
+                        }
+                    } else {
+                        // Inferir tipo basado en nombre
+                        if (propName.includes('date') || propName.includes('time')) {
+                            type = 'Date';
+                        } else if (propName.includes('price') || propName.includes('amount') || 
+                                  propName.includes('qty') || propName.includes('count') ||
+                                  propName.includes('id')) {
+                            type = 'number';
+                        } else if (propName.includes('active') || propName.includes('enabled') ||
+                                  propName.includes('completed')) {
+                            type = 'boolean';
+                        }
+                    }
+                    
+                    properties[propName] = type;
+                }
+            }
+        }
+        
+        return properties;
+    }
+    
+    /**
+     * Consolida modelos similares para evitar duplicación
+     */
+    private consolidateSimilarModels(models: Record<string, any>): Record<string, any> {
+        const finalModels: Record<string, any> = {};
+        const processed: string[] = [];
+        
+        const modelNames = Object.keys(models);
+        
+        // Calcular similitud entre modelos y consolidar
+        for (let i = 0; i < modelNames.length; i++) {
+            const modelName = modelNames[i];
+            
+            if (processed.includes(modelName)) {
+                continue;
+            }
+            
+            let bestMatch = modelName;
+            let mostSimilarFields = 0;
+            
+            // Buscar modelos similares para consolidar
+            for (let j = i + 1; j < modelNames.length; j++) {
+                const otherModelName = modelNames[j];
+                
+                if (processed.includes(otherModelName)) {
+                    continue;
+                }
+                
+                // Calcular similitud entre los modelos
+                const similarity = this.calculateModelSimilarity(models[modelName], models[otherModelName]);
+                
+                if (similarity > 0.7 && similarity > mostSimilarFields) {
+                    bestMatch = this.chooseBetterModelName(modelName, otherModelName);
+                    mostSimilarFields = similarity;
+                    processed.push(otherModelName);
+                }
+            }
+            
+            // Usar el mejor nombre de modelo
+            finalModels[bestMatch] = models[modelName];
+            processed.push(modelName);
+        }
+        
+        return finalModels;
+    }
+    
+    /**
+     * Calcula la similitud entre dos modelos (0-1)
+     */
+    private calculateModelSimilarity(model1: string, model2: string): number {
+        // Extraer propiedades del primer modelo
+        const props1 = new Set<string>();
+        const propPattern = /(\w+):\s*([\w\[\]<>|]+)/g;
+        let propMatch;
+        
+        while ((propMatch = propPattern.exec(model1)) !== null) {
+            props1.add(propMatch[1]);
+        }
+        
+        // Extraer propiedades del segundo modelo
+        const props2 = new Set<string>();
+        
+        while ((propMatch = propPattern.exec(model2)) !== null) {
+            props2.add(propMatch[1]);
+        }
+        
+        // Calcular propiedades en común
+        let commonProps = 0;
+        props1.forEach(prop => {
+            if (props2.has(prop)) {
+                commonProps++;
+            }
+        });
+        
+        // Devolver ratio de similitud
+        const totalProps = props1.size + props2.size;
+        return totalProps > 0 ? (2 * commonProps) / totalProps : 0;
+    }
+    
+    /**
+     * Elige el mejor nombre entre dos modelos similares
+     */
+    private chooseBetterModelName(name1: string, name2: string): string {
+        // Preferir nombres más cortos y significativos
+        if (name1.length < name2.length * 0.7) {
+            return name1;
+        } else if (name2.length < name1.length * 0.7) {
+            return name2;
+        }
+        
+        // Preferir nombre sin sufijos
+        const suffixes = ['Item', 'Entity', 'Model', 'Dto'];
+        for (const suffix of suffixes) {
+            if (name1.endsWith(suffix) && !name2.endsWith(suffix)) {
+                return name2;
+            } else if (!name1.endsWith(suffix) && name2.endsWith(suffix)) {
+                return name1;
+            }
+        }
+        
+        // Por defecto, el más corto
+        return name1.length <= name2.length ? name1 : name2;
+    }
+    
+    /**
+     * Detecta si un componente ya está en el array de importaciones
+     */
+    private isComponentImported(tsContent: string, className: string): boolean {
+        return tsContent.includes(`import { ${className} }`) || tsContent.includes(`import {${className}}`);
+    }
+    
+    /**
+     * Actualiza el archivo environment.ts para incluir URL de API
+     */
+    private async updateEnvironmentFile(projectDir: string): Promise<void> {
+        try {
+            // Buscar archivo environment
+            const envFiles = [
+                path.join(projectDir, 'src', 'environments', 'environment.ts'),
+                path.join(projectDir, 'src', 'environment.ts'), // Algunas versiones lo ponen aquí en Angular 19+
+                path.join(projectDir, 'src', 'app', 'environments', 'environment.ts') // Otra ubicación posible
+            ];
+            
+            let envFilePath = '';
+            for (const file of envFiles) {
+                if (fs.existsSync(file)) {
+                    envFilePath = file;
+                    break;
+                }
+            }
+            
+            // Si no existe, crear el archivo
+            if (!envFilePath) {
+                // Crear directorio si no existe
+                const envDir = path.join(projectDir, 'src', 'environments');
+                if (!fs.existsSync(envDir)) {
+                    fs.mkdirSync(envDir, { recursive: true });
+                }
+                
+                envFilePath = path.join(envDir, 'environment.ts');
+                const content = `// This file can be replaced during build
+export const environment = {
+  production: false,
+  apiUrl: 'http://localhost:3000/api'
+};
+`;
+                fs.writeFileSync(envFilePath, content);
+                
+                // Crear también environment.prod.ts
+                const prodEnvPath = path.join(envDir, 'environment.prod.ts');
+                const prodContent = `export const environment = {
+  production: true,
+  apiUrl: 'https://api.yourdomain.com/api'
+};
+`;
+                fs.writeFileSync(prodEnvPath, prodContent);
+                
+                this.logger.log('Archivos environment creados con URL de API');
+                return;
+            }
+            
+            // Si el archivo existe, verificar si ya tiene la propiedad apiUrl
+            let envContent = fs.readFileSync(envFilePath, 'utf8');
+            
+            if (!envContent.includes('apiUrl')) {
+                // Añadir apiUrl al environment
+                envContent = envContent.replace(
+                    /export const environment = \{/,
+                    `export const environment = {\n  apiUrl: 'http://localhost:3000/api',`
+                );
+                
+                fs.writeFileSync(envFilePath, envContent);
+                this.logger.log('URL de API añadida a environment.ts');
+            }
+            
+            // Hacer lo mismo para environment.prod.ts si existe
+            const prodEnvPath = envFilePath.replace('environment.ts', 'environment.prod.ts');
+            if (fs.existsSync(prodEnvPath)) {
+                let prodEnvContent = fs.readFileSync(prodEnvPath, 'utf8');
+                
+                if (!prodEnvContent.includes('apiUrl')) {
+                    prodEnvContent = prodEnvContent.replace(
+                        /export const environment = \{/,
+                        `export const environment = {\n  apiUrl: 'https://api.yourdomain.com/api',`
+                    );
+                    
+                    fs.writeFileSync(prodEnvPath, prodEnvContent);
+                }
+            }
+        } catch (error) {
+            this.logger.warn('Error actualizando environment.ts:', error);
+        }
+    }
+    
+    /**
+     * Combina contenido de componentes generados por CLI y por IA
+     */
+    private mergeComponentContent(cliContent: string, aiContent: string): string {
+        // Extraer importaciones del CLI (son más estándar y correctas)
+        const cliImportsMatch = cliContent.match(/(import[^;]+;[\r\n]*)+/);
+        const cliImports = cliImportsMatch ? cliImportsMatch[0] : '';
+        
+        // Extraer @Component del CLI (selector, standalone, etc.)
+        const cliComponentMatch = cliContent.match(/@Component\(\{[^}]+\}\)/s);
+        const cliComponent = cliComponentMatch ? cliComponentMatch[0] : '';
+        
+        // Extraer nombre de la clase del CLI
+        const cliClassNameMatch = cliContent.match(/export class ([A-Za-z0-9_]+)/);
+        const cliClassName = cliClassNameMatch ? cliClassNameMatch[1] : '';
+        
+        // Extraer cuerpo de la clase de la IA (la funcionalidad real)
+        let aiClassBodyMatch = aiContent.match(/export class [A-Za-z0-9_]+ [^{]*\{([\s\S]+)\}[\s\S]*$/);
+        let aiClassBody = aiClassBodyMatch ? aiClassBodyMatch[1] : '';
+        
+        // Si no se pudo extraer, usar código AI completo
+        if (!aiClassBody) {
+            return aiContent;
+        }
+        
+        // Fusionar todo
+        const mergedContent = `${cliImports}
+${cliComponent}
+export class ${cliClassName} {${aiClassBody}}
+`;
+        
+        return mergedContent;
+    }
+    
+    /**
+     * Combina servicios generados por CLI y por IA
+     */
+    private mergeServiceContent(cliContent: string, aiContent: string): string {
+        // Extraer importaciones del CLI (base estándar)
+        const cliImportsMatch = cliContent.match(/(import[^;]+;[\r\n]*)+/);
+        const cliImports = cliImportsMatch ? cliImportsMatch[0] : '';
+        
+        // Extraer importaciones de la IA
+        const aiImportsMatch = aiContent.match(/(import[^;]+;[\r\n]*)+/);
+        let aiImports = aiImportsMatch ? aiImportsMatch[0] : '';
+        
+        // Eliminar duplicados de importaciones
+        if (cliImports && aiImports) {
+            const cliLines = cliImports.split('\n');
+            const aiLines = aiImports.split('\n');
+            
+            for (const aiLine of aiLines) {
+                if (!cliLines.some(cliLine => cliLine.trim() === aiLine.trim()) && aiLine.trim()) {
+                    cliLines.push(aiLine);
+                }
+            }
+            
+            aiImports = cliLines.join('\n');
+        }
+        
+        // Extraer @Injectable del CLI
+        const cliInjectableMatch = cliContent.match(/@Injectable\(\{[^}]+\}\)/s);
+        const cliInjectable = cliInjectableMatch ? cliInjectableMatch[0] : '';
+        
+        // Extraer nombre de la clase del CLI
+        const cliClassNameMatch = cliContent.match(/export class ([A-Za-z0-9_]+)/);
+        const cliClassName = cliClassNameMatch ? cliClassNameMatch[1] : '';
+        
+        // Extraer cuerpo de la clase de la IA (métodos y propiedades)
+        let aiClassBodyMatch = aiContent.match(/export class [A-Za-z0-9_]+ [^{]*\{([\s\S]+)\}[\s\S]*$/);
+        let aiClassBody = aiClassBodyMatch ? aiClassBodyMatch[1] : '';
+        
+        // Si no se pudo extraer, usar contenido AI
+        if (!aiClassBody) {
+            return aiContent;
+        }
+        
+        // Fusionar todo
+        const mergedContent = `${aiImports}
+
+${cliInjectable}
+export class ${cliClassName} {${aiClassBody}}
+`;
+        
+        return mergedContent;
+    }
+    
+    /**
+     * Añade un componente manualmente cuando falla el CLI
+     */
+    private async addComponentManually(projectDir: string, componentName: string, componentData: any): Promise<void> {
+        try {
+            const componentsDir = path.join(projectDir, 'src', 'app', 'components');
+            if (!fs.existsSync(componentsDir)) {
+                fs.mkdirSync(componentsDir, { recursive: true });
+            }
+            
+            // Crear directorio para el componente
+            const componentDir = path.join(componentsDir, componentName);
+            if (!fs.existsSync(componentDir)) {
+                fs.mkdirSync(componentDir, { recursive: true });
+            }
+            
+            // Escribir archivos del componente
+            if (componentData.ts) {
+                // Asegurar que el selector sea correcto
+                let tsContent = componentData.ts;
+                if (!tsContent.includes(`selector: 'app-${componentName}'`)) {
+                    tsContent = tsContent.replace(
+                        /selector: ['"].*?['"],/,
+                        `selector: 'app-${componentName}',`
+                    );
+                    
+                    // Si no hay un selector, añadirlo
+                    if (!tsContent.includes('selector:')) {
+                        tsContent = tsContent.replace(
+                            /@Component\(\{/,
+                            `@Component({\n  selector: 'app-${componentName}',`
+                        );
+                    }
+                }
+                
+                // Asegurar que el templateUrl y styleUrls sean correctos
+                tsContent = tsContent.replace(/templateUrl: ['"].*?['"],/, `templateUrl: './${componentName}.component.html',`);
+                
+                // Determinar extensión de estilos a partir del proyecto o usar scss por defecto
+                const styleExt = this.getStyleExtensionFromAngularJson(projectDir) || 'scss';
+                tsContent = tsContent.replace(
+                    /styleUrls: \[['"].*?['"]]/,
+                    `styleUrls: ['./${componentName}.component.${styleExt}']`
+                );
+                
+                fs.writeFileSync(path.join(componentDir, `${componentName}.component.ts`), tsContent);
+            }
+            
+            if (componentData.html) {
+                fs.writeFileSync(path.join(componentDir, `${componentName}.component.html`), componentData.html);
+            } else {
+                // Crear HTML básico
+                fs.writeFileSync(path.join(componentDir, `${componentName}.component.html`), `<div>\n  ${componentName} works!\n</div>`);
+            }
+            
+            // Determinar extensión de estilos a partir del proyecto o usar scss por defecto
+            const styleExt = this.getStyleExtensionFromAngularJson(projectDir) || 'scss';
+            
+            if (componentData.scss || componentData.css) {
+                fs.writeFileSync(
+                    path.join(componentDir, `${componentName}.component.${styleExt}`),
+                    componentData.scss || componentData.css
+                );
+            } else {
+                // Crear estilos básicos
+                fs.writeFileSync(path.join(componentDir, `${componentName}.component.${styleExt}`), `/* ${componentName} Component Styles */`);
+            }
+            
+            this.logger.log(`Componente ${componentName} creado manualmente con éxito`);
+        } catch (error) {
+            this.logger.error(`Error creando componente ${componentName} manualmente:`, error);
+            throw error;
+        }
     }
     
     private cleanupTempFiles(projectDir: string): void {
