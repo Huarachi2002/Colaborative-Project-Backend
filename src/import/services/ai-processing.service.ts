@@ -149,7 +149,7 @@ export class AiProcessingService {
                 throw new Error('Se requiere proporcionar una imagen (imageBase64)');
             }
             
-            const prompt = promptIAComponentsAngular(imageBase64, options);
+            const prompt = promptIAComponentsAngular(options);
 
             return await this.generateComponentsWithOpenAI(prompt, imageBase64);
         } catch (error) {

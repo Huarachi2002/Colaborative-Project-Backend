@@ -4,9 +4,6 @@ export class AngularOptions {
     @IsString()
     name: string;
     
-    @IsString()
-    version: string;
-    
     @IsBoolean()
     @IsOptional()
     includeRouting: boolean;

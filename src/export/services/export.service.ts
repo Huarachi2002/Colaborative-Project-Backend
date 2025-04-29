@@ -226,9 +226,6 @@ export class ExportService {
         }
     }
 
-    /**
-     * Corrige errores comunes en el archivo TypeScript de un componente
-     */
     private fixComponentTsFile(componentName: string, tsContent: string): string {
         // 1. Asegurar que sea un componente standalone
         if (!tsContent.includes('standalone: true')) {
@@ -238,7 +235,7 @@ export class ExportService {
             );
         }
         
-        // 2. Asegurar que tenga imports correctos (CommonModule para *ngFor, *ngIf, etc.)
+        // 2. Asegurar que tenga imports correctos
         if (tsContent.includes('*ngFor') || tsContent.includes('*ngIf') || 
             tsContent.includes('[(ngModel)]') || tsContent.includes('[ngClass]')) {
             
@@ -345,9 +342,6 @@ export class ExportService {
         return tsContent;
     }
 
-    /**
-     * Corrige errores comunes en archivos HTML de componentes
-     */
     private fixComponentHtmlFile(htmlContent: string): string {
         // Corregir uso de ngModel sin importación
         if (htmlContent.includes('[(ngModel)]') && !htmlContent.includes('formControlName')) {
@@ -364,9 +358,6 @@ export class ExportService {
         return htmlContent;
     }
 
-    /**
-     * Corrige errores comunes en servicios
-     */
     private fixServiceFile(serviceName: string, serviceContent: string): string {
         // 1. Asegurar que el servicio tenga decorador Injectable y providedIn: 'root'
         if (!serviceContent.includes('@Injectable')) {
@@ -381,9 +372,6 @@ export class ExportService {
         return serviceContent;
     }
 
-    /**
-     * Genera un archivo de configuración de rutas básico
-     */
     private generateRoutingFile(components: any): string {
         let routingContent = `import { Routes } from '@angular/router';\n`;
         

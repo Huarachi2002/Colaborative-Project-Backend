@@ -113,7 +113,7 @@ Formato:
 
 Solo identifica formas básicas.`;
 
-export const promptIAComponentsAngular = (imageBase64: string, options: string) => {
+export const promptIAComponentsAngular = (options: string) => {
     return `Analiza esta imagen de un diagrama o mockup visual y genera un proyecto Angular completo basado en lo que ves.
     Proporciona el código para los componentes TypeScript (.ts), plantillas HTML (.html) y estilos SCSS (.scss).
     
