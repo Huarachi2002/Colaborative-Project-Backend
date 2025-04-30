@@ -19,7 +19,7 @@ RUN npm ci
 # Copiar el resto de los archivos
 COPY . .
 
-# Generar el prisma client con la URL de la base de datos actualizada
+# Generar el prisma client
 RUN npx prisma generate
 
 # Compilar la aplicación
@@ -43,20 +43,21 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma
 
-# Configurar la URL de la base de datos para el entorno de producción
-
-# Instalar solo las dependencias de producción y reconstruir bcrypt
+# Instalar solo las dependencias de producción y generar el cliente Prisma
 RUN npm ci --only=production && npx prisma generate
 
 # Crear directorios necesarios
 RUN mkdir -p ./uploads ./temp
 RUN chmod -R 755 ./uploads ./temp
 
+# Copiar el script de inicio y darle permisos de ejecución
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
+
 # Exponer el puerto que usa la aplicación
 EXPOSE 3001
 
-COPY --from=builder /app/start.sh ./start.sh
-RUN chmod +x ./start.sh
-
 # Comando para iniciar la aplicación
-CMD ["./start.sh"]
+CMD echo "Esperando a que la base de datos esté lista..." && \
+    npx prisma migrate deploy && \
+    npm run start:prod

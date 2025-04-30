@@ -6,7 +6,7 @@ services:
     container_name: diagram_db_container
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: hiachi20
+      POSTGRES_PASSWORD: 123
       POSTGRES_DB: Diagrama
     ports:
       - "5433:5432"
@@ -29,7 +29,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://postgres:hiachi20@diagram_db/Diagrama?schema=public
+      DATABASE_URL: postgresql://postgres:123@diagram_db/Diagrama?schema=public
       SECRET_KEY_JWT: ${SECRET_KEY_JWT}
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL}
       PASSWORD_EMAIL: ${PASSWORD_EMAIL}
