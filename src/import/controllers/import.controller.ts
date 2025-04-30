@@ -57,12 +57,10 @@ export class ImportController {
           // Procesar la imagen con IA
           const result = await this.aiProcessingService.processSketch(imageBuffer);
 
-          // Opcionalmente eliminar el archivo temporal
           fs.unlink(file.path, (err) => {
             if (err) console.error('Error al eliminar archivo temporal:', err);
           });
           
-          // Devolver los elementos detectados directamente
           return {
               statusCode,
               message: 'Archivo subido y procesado correctamente',

@@ -115,75 +115,93 @@ Solo identifica formas básicas.`;
 
 export const promptIAComponentsAngular = (options: string) => {
     return `Analiza esta imagen de un diagrama o mockup visual y genera un proyecto Angular completo basado en lo que ves.
-    Proporciona el código para los componentes TypeScript (.ts), plantillas HTML (.html) y estilos SCSS (.scss).
+    Eres un experto en Angular que genera código de alta calidad compatible con la versión más reciente de Angular.
     
-    INSTRUCCIONES DETALLADAS:
+    ## INSTRUCCIONES PRINCIPALES:
 
     1. ANÁLISIS DE LA IMAGEN:
        - Interpreta la imagen e identifica todos los componentes visuales (formularios, tablas, botones, menús, etc).
        - Reconoce la estructura y jerarquía de la interfaz (header, sidebar, main content, footer).
        - Identifica flujos de navegación o acciones del usuario implícitas.
 
-    2. GENERACIÓN DE COMPONENTES:
-       - Crea componentes Angular reutilizables para cada elemento significativo de la interfaz.
-       - Desarrolla formularios con validaciones apropiadas si se identifican campos de entrada.
-       - Genera tablas con ordenación y filtrado si hay estructuras tabulares.
+    2. GENERACIÓN DE CÓDIGO DE COMPONENTES:
+       - Crea componentes Angular STANDALONE para cada elemento significativo (compatibles con Angular 19+).
+       - Asegúrate de que todos los componentes incluyan "standalone: true" en su decorador @Component.
+       - Incluye los imports necesarios para cada componente (CommonModule, RouterModule, FormsModule, etc.)
+       - Genera formularios reactivos con FormBuilder y ReactiveFormsModule donde sea apropiado.
+       - Declara explícitamente todas las variables, inicializa @Input(), @Output() y utiliza tipos TypeScript.
+       
+    3. ESTRUCTURA Y SERVICIOS:
+       - Implementa una estructura de rutas clara usando Routes en app.routes.ts (modelo standalone).
+       - Asegura que todos los servicios usen el decorador @Injectable({providedIn: 'root'}).
+       - Implementa servicios CRUD completos con HttpClient y environment.
+       - Utiliza observables (rxjs) para comunicación reactiva entre componentes.
 
-    3. ESTRUCTURA DE LA APLICACIÓN:
-       - Implementa un sistema de navegación coherente a través de rutas.
-       - Organiza los componentes de manera lógica y modular.
-       - Crea servicios para gestionar operaciones CRUD y estado de la aplicación.
+    4. INTEGRACIÓN Y BUENAS PRÁCTICAS:
+       - Asegúrate de que app.component incluya router-outlet si estás usando rutas.
+       - Incluye imports completos y correctos en cada archivo.
+       - Asegura que las propiedades @Input tengan inicialización de valor por defecto.
+       - Evita código duplicado y aislado que no se integre en el proyecto.
+       - Implementa interfaces o modelos para las estructuras de datos.
+       - Usa herencia o composición cuando sea apropiado para código reutilizable.
 
-    4. INTEGRACIÓN Y VISUALIZACIÓN:
-       - Modifica app.component.* para integrar correctamente todos los componentes generados.
-       - Asegura que la navegación funcione correctamente en app.component.html.
-       - Establece un diseño responsive y visualmente atractivo.
+    ## ESPECÍFICAMENTE PARA ANGULAR 19+:
+    - Usa únicamente componentes standalone (no módulos NgModule, excepto para librerías externas).
+    - Configura correctamente en app.config.ts si es necesario.
+    - Utiliza el bootstrap con provideRouter en vez de los módulos de enrutamiento antiguos.
+    - Asegúrate que todos los componentes declaren sus dependencias en el array "imports" del decorador.
+    - Evita referencias a NgModule o a estrategias anteriores de organización de código.
+    
+    ## PREVENCIÓN DE ERRORES COMUNES:
+    - Inicializa SIEMPRE valores para propiedades @Input() (ej: @Input() title: string = '';)
+    - Implementa siempre la interfaz OnInit si usas ngOnInit().
+    - Incluye CommonModule en los imports si usas directivas como *ngIf o *ngFor.
+    - Implementa servicios con observables BehaviorSubject para estado compartido.
+    - No dupliques funciones o métodos entre componentes.
+    - Utiliza tipado fuerte en todas las variables y funciones.
+    - Asegúrate de que las rutas sean correctas y no contengan caracteres especiales.
 
-    ESPECIALMENTE IMPORTANTE:
-    - Genera un app.component.html que integre correctamente todos los componentes, ya sea usando router-outlet o colocándolos directamente.
-    - Define claramente cómo los componentes se relacionan entre sí y cómo deben visualizarse en la aplicación.
-    - Si identificas múltiples "páginas" o vistas, configura rutas adecuadas y asegúrate de que el app.component.html incluya la navegación necesaria.
+    ## ESTRUCTURA JSON REQUERIDA DE LA RESPUESTA:
 
     Opciones de proyecto: ${options}
 
-    Responde con un objeto JSON con esta estructura:
+    Responde con un objeto JSON con exactamente esta estructura:
 
     {
       "projectStructure": {
         "description": "Descripción detallada de la estructura del proyecto y cómo se relacionan los componentes"
       },
       "appComponent": {
-        "html": "Código completo para app.component.html que integra los componentes generados",
-        "ts": "Código para app.component.ts",
-        "scss": "Estilos para app.component.scss"
+        "html": "Código completo para app.component.html con router-outlet si usa rutas",
+        "ts": "Código para app.component.ts con standalone:true y todos los imports",
+        "scss": "Estilos para app.component.scss con diseño responsive"
       },
       "components": {
-        "componentName1": {
-          "ts": "contenido del archivo .ts",
-          "html": "contenido del archivo .html",
-          "scss": "contenido del archivo .scss"
+        "component-name-1": {
+          "ts": "Código TypeScript para el componente con todas las importaciones, validaciones y lógica",
+          "html": "Plantilla HTML completa con eventos y bindings",
+          "scss": "Estilos SCSS específicos para este componente"
         },
-        "componentName2": {
+        "component-name-2": {
           "ts": "...",
           "html": "...",
           "scss": "..."
         }
       },
       "services": {
-        "serviceName1": "contenido del servicio que implementa operaciones CRUD",
-        "serviceName2": "..."
+        "data.service": "// Implementación completa del servicio con métodos CRUD",
+        "auth.service": "// Servicio de autenticación si es aplicable"
       },
       "models": {
-        "modelName1": "interfaz o clase del modelo",
-        "modelName2": "..."
+        "user.model": "// Interface o clase con propiedades tipadas",
+        "product.model": "// Otro modelo si corresponde"
       },
-      "modules": {
-        "moduleName1": "contenido del módulo",
-        "moduleName2": "..."
-      },
-      "routing": "configuración detallada de rutas del proyecto"
+      "routing": "// Contenido de app.routes.ts con rutas bien definidas"
     }
 
-    Asegúrate de que el JSON sea válido y que cada componente tenga todo el código necesario para funcionar correctamente.
-    El proyecto debe estar listo para ejecutarse a un 95% de completitud, solo requiriendo ajustes mínimos.`;
+    IMPORTANTE: Todos los nombres de componentes deben usar kebab-case y cada componente debe estar completo y funcional.
+    Asegúrate de que cada archivo tenga todas las importaciones necesarias y que el código esté correctamente tipado.
+    Cada componente debe ser standalone e importar sus dependencias directamente.
+    El JSON resultante debe ser válido y sin errores de sintaxis.
+    Evitar métodos o funciones parcialmente implementadas con "// TODO" o código incompleto.`;
 };
